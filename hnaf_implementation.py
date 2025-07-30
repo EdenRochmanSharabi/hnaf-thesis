@@ -130,10 +130,14 @@ class HNAF:
             # Buffer de replay
             self.replay_buffers[mode] = ReplayBuffer()
         
-        # Matrices de transformación (modos discretos)
+        # Matrices de transformación (modos discretos) - por defecto
         self.A1 = np.array([[1, 50], [-1, 1]])
         self.A2 = np.array([[1, -1], [50, 1]])
         self.transformation_matrices = {0: self.A1, 1: self.A2}
+        
+        # Funciones personalizadas (se pueden sobrescribir)
+        self.transformation_functions = None
+        self.reward_function = None
         
         # NAF corregido para verificación
         self.naf_verifier = CorrectedOptimizationFunctions(t=1.0)
@@ -273,14 +277,27 @@ class HNAF:
             mode, action = self.select_action(state, epsilon)
             
             # Aplicar transformación según el modo
-            A = self.transformation_matrices[mode]
-            next_state = A @ state.reshape(-1, 1)
-            next_state = next_state.flatten()
+            if self.transformation_functions is not None:
+                # Usar funciones personalizadas
+                transform_func = self.transformation_functions[mode]
+                x1, y1 = transform_func(state[0], state[1])
+                next_state = np.array([x1, y1])
+            else:
+                # Usar matrices por defecto
+                A = self.transformation_matrices[mode]
+                next_state = A @ state.reshape(-1, 1)
+                next_state = next_state.flatten()
             
-            # Calcular recompensa usando NAF corregido
-            reward = self.naf_verifier.execute_function("reward_function", 
-                                                      next_state[0], next_state[1], 
-                                                      state[0], state[1])
+            # Calcular recompensa
+            if self.reward_function is not None:
+                # Usar función de recompensa personalizada
+                reward = self.reward_function(next_state[0], next_state[1], 
+                                           state[0], state[1])
+            else:
+                # Usar NAF corregido por defecto
+                reward = self.naf_verifier.execute_function("reward_function", 
+                                                          next_state[0], next_state[1], 
+                                                          state[0], state[1])
             
             # Almacenar transición
             self.step(state, mode, action, reward, next_state)
@@ -319,14 +336,27 @@ class HNAF:
                 episode_modes.append(mode)
                 
                 # Aplicar transformación
-                A = self.transformation_matrices[mode]
-                next_state = A @ state.reshape(-1, 1)
-                next_state = next_state.flatten()
+                if self.transformation_functions is not None:
+                    # Usar funciones personalizadas
+                    transform_func = self.transformation_functions[mode]
+                    x1, y1 = transform_func(state[0], state[1])
+                    next_state = np.array([x1, y1])
+                else:
+                    # Usar matrices por defecto
+                    A = self.transformation_matrices[mode]
+                    next_state = A @ state.reshape(-1, 1)
+                    next_state = next_state.flatten()
                 
                 # Recompensa
-                reward = self.naf_verifier.execute_function("reward_function", 
-                                                          next_state[0], next_state[1], 
-                                                          state[0], state[1])
+                if self.reward_function is not None:
+                    # Usar función de recompensa personalizada
+                    reward = self.reward_function(next_state[0], next_state[1], 
+                                               state[0], state[1])
+                else:
+                    # Usar NAF corregido por defecto
+                    reward = self.naf_verifier.execute_function("reward_function", 
+                                                              next_state[0], next_state[1], 
+                                                              state[0], state[1])
                 
                 episode_reward += reward
                 state = next_state.copy()
@@ -365,20 +395,45 @@ class HNAF:
             Q_pred = self.compute_Q_value(x0, selected_action, selected_mode)
             
             # Aplicar transformación del modo seleccionado
-            A = self.transformation_matrices[selected_mode]
-            x_next = A @ x0.reshape(-1, 1)
-            x_next = x_next.flatten()
+            if self.transformation_functions is not None:
+                # Usar funciones personalizadas
+                transform_func = self.transformation_functions[selected_mode]
+                x1, y1 = transform_func(x0[0], x0[1])
+                x_next = np.array([x1, y1])
+            else:
+                # Usar matrices por defecto
+                A = self.transformation_matrices[selected_mode]
+                x_next = A @ x0.reshape(-1, 1)
+                x_next = x_next.flatten()
             
             # Recompensa real
-            r_real = self.naf_verifier.execute_function("reward_function", 
-                                                      x_next[0], x_next[1], 
-                                                      x0[0], x0[1])
+            if self.reward_function is not None:
+                # Usar función de recompensa personalizada
+                r_real = self.reward_function(x_next[0], x_next[1], x0[0], x0[1])
+            else:
+                # Usar NAF corregido por defecto
+                r_real = self.naf_verifier.execute_function("reward_function", 
+                                                          x_next[0], x_next[1], 
+                                                          x0[0], x0[1])
             
             # NAF individual para comparar
-            x1_naf = self.naf_verifier.execute_function("transform_x1", x0[0], x0[1])
-            x2_naf = self.naf_verifier.execute_function("transform_x2", x0[0], x0[1])
-            r1_naf = self.naf_verifier.execute_function("reward_function", x1_naf[0, 0], x1_naf[1, 0], x0[0], x0[1])
-            r2_naf = self.naf_verifier.execute_function("reward_function", x2_naf[0, 0], x2_naf[1, 0], x0[0], x0[1])
+            if self.transformation_functions is not None:
+                # Usar funciones personalizadas para comparación
+                x1_naf_x, x1_naf_y = self.transformation_functions[0](x0[0], x0[1])
+                x2_naf_x, x2_naf_y = self.transformation_functions[1](x0[0], x0[1])
+                
+                if self.reward_function is not None:
+                    r1_naf = self.reward_function(x1_naf_x, x1_naf_y, x0[0], x0[1])
+                    r2_naf = self.reward_function(x2_naf_x, x2_naf_y, x0[0], x0[1])
+                else:
+                    r1_naf = self.naf_verifier.execute_function("reward_function", x1_naf_x, x1_naf_y, x0[0], x0[1])
+                    r2_naf = self.naf_verifier.execute_function("reward_function", x2_naf_x, x2_naf_y, x0[0], x0[1])
+            else:
+                # Usar NAF corregido por defecto
+                x1_naf = self.naf_verifier.execute_function("transform_x1", x0[0], x0[1])
+                x2_naf = self.naf_verifier.execute_function("transform_x2", x0[0], x0[1])
+                r1_naf = self.naf_verifier.execute_function("reward_function", x1_naf[0, 0], x1_naf[1, 0], x0[0], x0[1])
+                r2_naf = self.naf_verifier.execute_function("reward_function", x2_naf[0, 0], x2_naf[1, 0], x0[0], x0[1])
             
             print(f"  HNAF: Modo {selected_mode}, Q_pred={Q_pred:.4f}, R_real={r_real:.4f}")
             print(f"  NAF1: R={r1_naf:.4f}, NAF2: R={r2_naf:.4f}")

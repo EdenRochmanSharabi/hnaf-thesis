@@ -6,7 +6,10 @@ Versión corregida de NAF que usa exponencial de matriz para coincidir con la so
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
-from .optimization_functions import OptimizationFunctions
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from optimization_functions import OptimizationFunctions
 
 class CorrectedOptimizationFunctions(OptimizationFunctions):
     """
