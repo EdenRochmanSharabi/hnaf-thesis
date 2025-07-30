@@ -1,24 +1,24 @@
 # Contributing to HNAF Thesis
 
-## 📋 Sobre este Proyecto
+## Sobre este Proyecto
 
 Este es un proyecto de **tesis de grado** sobre Hybrid Normalized Advantage Functions (HNAF). El código implementa un algoritmo de aprendizaje por refuerzo híbrido para sistemas de control con modos discretos y acciones continuas.
 
-## 🎯 Tipos de Contribuciones Aceptadas
+## Tipos de Contribuciones Aceptadas
 
-### ✅ Bienvenidas
+### Bienvenidas
 - **Reportes de bugs**: Si encuentras algún error en el código
 - **Sugerencias de mejora**: Ideas para optimizar el algoritmo
 - **Documentación**: Mejoras en la documentación existente
 - **Tests**: Casos de prueba adicionales
 - **Optimizaciones**: Mejoras en rendimiento o estabilidad
 
-### ❌ No Aceptadas
+### No Aceptadas
 - Cambios que alteren significativamente la metodología de la tesis
 - Modificaciones que no estén respaldadas por la literatura científica
 - Cambios que comprometan la reproducibilidad de los resultados
 
-## 🚀 Cómo Contribuir
+## Cómo Contribuir
 
 ### 1. Fork del Repositorio
 1. Ve a [https://github.com/EdenRochmanSharabi/hnaf-thesis](https://github.com/EdenRochmanSharabi/hnaf-thesis)
@@ -49,7 +49,7 @@ git push origin feature/nombre-de-tu-mejora
 3. Describe claramente los cambios realizados
 4. Menciona si es un bug fix, feature, o mejora de documentación
 
-## 📝 Estilo de Código
+## Estilo de Código
 
 ### Python
 - Usar **snake_case** para variables y funciones
@@ -74,7 +74,7 @@ def calculate_reward(state: np.ndarray, action: np.ndarray) -> float:
     return -np.linalg.norm(state - action)
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Ejecutar Tests Existentes
 ```bash
@@ -86,7 +86,7 @@ python test_hnaf_improvements.py
 - Usar nombres descriptivos para las funciones de test
 - Incluir casos edge y casos de error
 
-## 📚 Documentación
+## Documentación
 
 ### Estructura de Documentación
 - `README.md`: Documentación principal del proyecto
@@ -99,7 +99,7 @@ python test_hnaf_improvements.py
 - Usar ejemplos claros y concisos
 - Incluir diagramas cuando sea útil
 
-## 🐛 Reportar Bugs
+## Reportar Bugs
 
 ### Información Requerida
 1. **Descripción del bug**: Qué esperabas vs qué pasó
@@ -138,7 +138,7 @@ python test_hnaf_improvements.py
 ```
 ```
 
-## 💡 Sugerencias de Mejora
+## Sugerencias de Mejora
 
 ### Criterios de Evaluación
 - **Relevancia**: ¿Es útil para la investigación?
@@ -166,7 +166,7 @@ python test_hnaf_improvements.py
 [¿Qué beneficios traería?]
 ```
 
-## 📞 Contacto
+## Contacto
 
 Para consultas específicas sobre la tesis o el algoritmo:
 
@@ -174,10 +174,10 @@ Para consultas específicas sobre la tesis o el algoritmo:
 - **Email**: eden@example.com
 - **GitHub**: [@EdenRochmanSharabi](https://github.com/EdenRochmanSharabi)
 
-## 📄 Licencia
+## Licencia
 
 Al contribuir a este proyecto, aceptas que tus contribuciones serán de código abierto.
 
 ---
 
-**Gracias por contribuir a este proyecto de investigación académica!** 🎓 
+**Gracias por contribuir a este proyecto de investigación académica!** 
