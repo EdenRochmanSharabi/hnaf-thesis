@@ -4,6 +4,93 @@
 
 Este repositorio contiene la implementación completa del **Hybrid Normalized Advantage Function (HNAF)** desarrollado como parte de la tesis de grado. El HNAF es un algoritmo de aprendizaje por refuerzo que combina control discreto y continuo para sistemas de control híbridos.
 
+## 🖥️ Interfaz Gráfica de Usuario (GUI)
+
+El proyecto incluye una interfaz gráfica completa para controlar y visualizar el entrenamiento del HNAF:
+
+![Interfaz Gráfica HNAF](hnaf_gui_screenshot.png)
+
+### Características de la Interfaz
+
+#### 1. **Panel de Parámetros de Red Neuronal** (Superior Izquierda)
+- **Dimensión del Estado**: 2 (configurable)
+- **Dimensión de Acción**: 2 (configurable) 
+- **Número de Modos**: 2 (configurable)
+- **Capas Ocultas**: 32 (configurable)
+
+#### 2. **Panel de Parámetros de Entrenamiento** (Superior Centro)
+- **Learning Rate**: 0.0001 (configurable)
+- **Tau (Soft Update)**: 0.001 (configurable)
+- **Gamma (Discount)**: 0.9 (configurable)
+- **Episodios**: 1000 (configurable)
+- **Batch Size**: 32 (configurable)
+- **Epsilon**: 0.2 (configurable)
+- **Max Steps**: 20 (configurable)
+
+#### 3. **Botones de Control** (Superior Derecha)
+- **Iniciar Entrenamiento**: Comienza el proceso de entrenamiento
+- **Evaluar Modelo**: Evalúa el modelo entrenado
+- **Verificar HNAF**: Compara HNAF con NAF individual
+- **Limpiar Salida**: Limpia la terminal integrada
+
+#### 4. **Editor de Funciones Personalizadas** (Centro Izquierda)
+- **Editor de Código**: Área de texto para escribir funciones personalizadas
+- **Plantilla Incluida**: Código de ejemplo con matrices A1 y A2
+- **Botones de Funciones**:
+  - **Cargar Plantilla**: Carga el código de ejemplo
+  - **Probar Funciones**: Valida la sintaxis del código
+  - **Guardar Funciones**: Guarda las funciones en archivo
+  - **Cargar Funciones**: Carga funciones desde archivo
+  - **Usar Funciones Personalizadas**: Checkbox para activar funciones personalizadas
+
+#### 5. **Salida de Terminal** (Inferior Izquierda)
+- **Terminal Integrada**: Muestra resultados en tiempo real
+- **Información de Entrenamiento**: Progreso, recompensas, pérdidas
+- **Resultados de Verificación**: Comparación HNAF vs NAF individual
+- **Casos de Prueba**: Estados iniciales y selección de modos
+
+#### 6. **Gráficos de Resultados** (Inferior Derecha)
+- **Gráfico de Entrenamiento**: Recompensas por episodio
+- **Línea de Evaluación**: Recompensas de evaluación
+- **Promedio Móvil**: Tendencia de recompensas (100 episodios)
+- **Visualización en Tiempo Real**: Actualización automática durante entrenamiento
+
+### Cómo Usar la Interfaz
+
+#### **Paso 1: Configurar Parámetros**
+1. Ajusta los parámetros de red neuronal según tus necesidades
+2. Configura los parámetros de entrenamiento
+3. Los valores por defecto están optimizados para el sistema HNAF
+
+#### **Paso 2: Funciones Personalizadas (Opcional)**
+1. Haz clic en "Cargar Plantilla" para ver el código de ejemplo
+2. Modifica las matrices A1 y A2 según tu problema
+3. Ajusta la función de recompensa si es necesario
+4. Haz clic en "Probar Funciones" para validar
+5. Marca "Usar Funciones Personalizadas" si quieres usar tu código
+
+#### **Paso 3: Iniciar Entrenamiento**
+1. Haz clic en "Iniciar Entrenamiento"
+2. Observa el progreso en la terminal integrada
+3. Los gráficos se actualizan automáticamente
+4. El entrenamiento se ejecuta en segundo plano
+
+#### **Paso 4: Evaluar Resultados**
+1. Una vez completado el entrenamiento, haz clic en "Evaluar Modelo"
+2. Usa "Verificar HNAF" para comparar con NAF individual
+3. Analiza los gráficos de resultados
+4. Revisa la salida de terminal para detalles técnicos
+
+### Ejecutar la Interfaz
+
+```bash
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Ejecutar la interfaz gráfica
+python run_gui.py
+```
+
 ## Objetivo
 
 Implementar y optimizar un algoritmo de aprendizaje por refuerzo híbrido que pueda manejar sistemas de control con modos discretos y acciones continuas, aplicando las técnicas de Normalized Advantage Function (NAF) a problemas de control híbrido.
