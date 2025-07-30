@@ -176,7 +176,7 @@ Para consultas específicas sobre la tesis o el algoritmo:
 
 ## 📄 Licencia
 
-Al contribuir a este proyecto, aceptas que tus contribuciones serán licenciadas bajo la [MIT License](LICENSE).
+Al contribuir a este proyecto, aceptas que tus contribuciones serán de código abierto.
 
 ---
 

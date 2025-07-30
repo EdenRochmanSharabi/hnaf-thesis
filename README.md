@@ -131,11 +131,11 @@ x(t) = expm(A * t) @ x₀
 
 **Eden Rochman**  
 Estudiante de Ingeniería  
-Tesis de Grado - 2024
+Tesis de Grado
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+Este proyecto es de código abierto (Open Source).
 
 ## 🤝 Contribuciones
 
