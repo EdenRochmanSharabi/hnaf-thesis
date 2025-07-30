@@ -12,6 +12,7 @@ import io
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+import torch
 from hnaf_implementation import HNAF, train_hnaf, visualize_training
 from src.hnaf_stable import StableHNAF, train_stable_hnaf
 
@@ -545,6 +546,10 @@ def reward_function(x, y, x0, y0):
             else:
                 print("Usando funciones por defecto")
             print()
+            
+            # Fijar semilla para reproducibilidad exacta
+            np.random.seed(42)
+            torch.manual_seed(42)
             
             # Crear modelo HNAF estable con parámetros exactos de demo_completo.py
             self.hnaf_model = StableHNAF(
