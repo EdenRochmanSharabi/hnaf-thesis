@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Interfaz gráfica para el control de hiperparámetros de HNAF
-Interfaz profesional para tesis de investigación
+Interfaz gráfica modular para HNAF
+Solo maneja la interfaz, no la lógica de entrenamiento
 """
 
 import tkinter as tk
@@ -12,10 +12,6 @@ import io
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-import torch
-from hnaf_implementation import HNAF, train_hnaf, visualize_training
-from src.hnaf_stable import StableHNAF, train_stable_hnaf
-from src.hnaf_improved import ImprovedHNAF, train_improved_hnaf
 
 class RedirectText:
     """Clase para redirigir la salida de print a un widget de texto"""
@@ -143,11 +139,11 @@ class HNAFGUI:
         training_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         
         # Variables para parámetros de entrenamiento (valores optimizados por defecto)
-        self.learning_rate_var = tk.DoubleVar(value=0.0001)  # 1e-4
-        self.tau_var = tk.DoubleVar(value=0.001)            # 0.001
+        self.learning_rate_var = tk.DoubleVar(value=0.00001)  # 1e-5
+        self.tau_var = tk.DoubleVar(value=0.00001)            # 1e-5
         self.gamma_var = tk.DoubleVar(value=0.9)            # 0.9
         self.num_episodes_var = tk.IntVar(value=1000)       # 1000
-        self.batch_size_var = tk.IntVar(value=32)           # 32
+        self.batch_size_var = tk.IntVar(value=64)           # 64 (aumentado)
         self.initial_epsilon_var = tk.DoubleVar(value=0.5)  # ε inicial optimizado
         self.final_epsilon_var = tk.DoubleVar(value=0.05)   # ε final optimizado
         self.max_steps_var = tk.IntVar(value=50)            # Horizonte optimizado
@@ -437,6 +433,8 @@ def reward_function(x, y, x0, y0):
                                       command=self.clear_output)
         self.clear_button.pack(pady=5, fill=tk.X)
         
+
+        
         # Barra de progreso
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(button_frame, variable=self.progress_var, 
@@ -542,122 +540,15 @@ def reward_function(x, y, x0, y0):
     
     def run_training(self, params):
         """Ejecutar entrenamiento con parámetros dados"""
+        # Importar módulo de entrenamiento
+        from training_manager import TrainingManager
+        
         try:
-            print("="*60)
-            print("INICIANDO ENTRENAMIENTO HNAF MEJORADO")
-            print("="*60)
-            print("🚀 Usando HNAF MEJORADO con optimizaciones avanzadas:")
-            print(f"  - Red: {params['num_layers']} capas de {params['hidden_dim']} unidades")
-            print(f"  - ε-greedy decay: {params['initial_epsilon']} -> {params['final_epsilon']}")
-            print(f"  - Learning rate: {params['lr']}")
-            print(f"  - Prioritized replay con buffer de 10000")
-            print(f"  - Normalización de estados y recompensas")
-            print(f"  - Reward shaping local")
-            print(f"  - Evaluación en grid 100x100")
-            print(f"  - Horizonte más largo: {params['max_steps']} pasos")
+            # Crear manager de entrenamiento
+            training_manager = TrainingManager()
             
-            if 'custom_functions' in params:
-                print("✅ Usando funciones personalizadas")
-            else:
-                print("✅ Usando funciones por defecto")
-            print()
-            
-            # Fijar semilla para reproducibilidad
-            np.random.seed(42)
-            torch.manual_seed(42)
-            
-            # Crear modelo HNAF mejorado
-            self.hnaf_model = ImprovedHNAF(
-                state_dim=params['state_dim'],
-                action_dim=params['action_dim'],
-                num_modes=params['num_modes'],
-                hidden_dim=params['hidden_dim'],
-                num_layers=params['num_layers'],
-                lr=params['lr'],
-                tau=params['tau'],
-                gamma=params['gamma']
-            )
-            
-            # Si hay funciones personalizadas, actualizar el modelo
-            if 'custom_functions' in params:
-                custom_funcs = params['custom_functions']
-                self.hnaf_model.transformation_functions = custom_funcs['transformation_functions']
-                self.hnaf_model.reward_function = custom_funcs['reward_function']
-            
-            # Métricas de entrenamiento
-            episode_rewards = []
-            losses = []
-            eval_rewards = []
-            grid_accuracies = []
-            eval_interval = 50
-            
-            # Entrenamiento mejorado con ε-greedy decay
-            epsilon_decay = (params['initial_epsilon'] - params['final_epsilon']) / params['num_episodes']
-            
-            for episode in range(params['num_episodes']):
-                # Calcular epsilon actual
-                epsilon = max(params['final_epsilon'], 
-                            params['initial_epsilon'] - episode * epsilon_decay)
-                
-                # Entrenar episodio
-                reward, _ = self.hnaf_model.train_episode(
-                    max_steps=params['max_steps'],
-                    epsilon=epsilon
-                )
-                episode_rewards.append(reward)
-                
-                # Actualizar redes
-                loss = self.hnaf_model.update(batch_size=params['batch_size'])
-                if loss is not None:
-                    losses.append(loss)
-                
-                # Actualizar redes objetivo
-                if hasattr(self.hnaf_model, 'update_target_networks'):
-                    self.hnaf_model.update_target_networks()
-                
-                # Actualizar progreso
-                progress = (episode + 1) / params['num_episodes'] * 100
-                self.root.after(0, lambda p=progress: self.progress_var.set(p))
-                
-                # Evaluación periódica
-                if (episode + 1) % eval_interval == 0:
-                    eval_reward, mode_selections = self.hnaf_model.evaluate_policy(num_episodes=10)
-                    eval_rewards.append(eval_reward)
-                    
-                    # Evaluación en grid para HNAF mejorado
-                    if hasattr(self.hnaf_model, 'evaluate_policy_grid'):
-                        grid_results = self.hnaf_model.evaluate_policy_grid(grid_size=50)
-                        grid_accuracies.append(grid_results['optimal_accuracy'])
-                        
-                        print(f"Episodio {episode+1}/{params['num_episodes']}")
-                        print(f"  ε: {epsilon:.3f}")
-                        print(f"  Recompensa promedio: {np.mean(episode_rewards[-eval_interval:]):.4f}")
-                        print(f"  Recompensa evaluación: {eval_reward:.4f}")
-                        print(f"  Precisión grid: {grid_results['optimal_accuracy']:.2%}")
-                        print(f"  Selección modos: {mode_selections}")
-                        if losses:
-                            print(f"  Pérdida promedio: {np.mean(losses[-eval_interval:]):.6f}")
-                        print()
-                    else:
-                        print(f"Episodio {episode+1}/{params['num_episodes']}")
-                        print(f"  Recompensa promedio: {np.mean(episode_rewards[-eval_interval:]):.4f}")
-                        print(f"  Recompensa evaluación: {eval_reward:.4f}")
-                        print(f"  Selección de modos: {mode_selections}")
-                        if losses:
-                            print(f"  Pérdida promedio: {np.mean(losses[-eval_interval:]):.6f}")
-                        print()
-            
-            # Verificación final
-            self.hnaf_model.verify_hnaf()
-            
-            # Guardar resultados
-            self.training_results = {
-                'episode_rewards': episode_rewards,
-                'losses': losses,
-                'eval_rewards': eval_rewards,
-                'grid_accuracies': grid_accuracies,
-                'eval_interval': eval_interval
-            }
+            # Ejecutar entrenamiento
+            self.hnaf_model, self.training_results = training_manager.train_hnaf(params)
             
             # Actualizar interfaz
             self.root.after(0, self.training_completed)
@@ -700,19 +591,14 @@ def reward_function(x, y, x0, y0):
         print("EVALUACIÓN DEL MODELO")
         print("="*60)
         
-        # Evaluación estándar
-        eval_reward, mode_selections = self.hnaf_model.evaluate_policy(num_episodes=20)
+        # Importar módulo de evaluación
+        from evaluation_manager import EvaluationManager
         
-        print(f"Recompensa promedio de evaluación: {eval_reward:.4f}")
-        print(f"Distribución de selección de modos: {mode_selections}")
+        # Crear manager de evaluación
+        eval_manager = EvaluationManager()
         
-        # Evaluación en grid si está disponible
-        if hasattr(self.hnaf_model, 'evaluate_policy_grid'):
-            print("\n📊 Evaluación en grid 100x100:")
-            grid_results = self.hnaf_model.evaluate_policy_grid(grid_size=100)
-            print(f"Precisión en grid: {grid_results['optimal_accuracy']:.2%}")
-            print(f"Q-values promedio: {np.mean(grid_results['q_values']):.4f}")
-            print(f"Q-values std: {np.std(grid_results['q_values']):.4f}")
+        # Ejecutar evaluación
+        eval_results = eval_manager.evaluate_model(self.hnaf_model)
         
         print("="*60)
     
@@ -736,74 +622,16 @@ def reward_function(x, y, x0, y0):
         if self.training_results is None:
             return
         
-        # Limpiar gráfico
-        self.ax.clear()
+        # Importar módulo de visualización
+        from visualization_manager import VisualizationManager
         
-        # Datos
-        episode_rewards = self.training_results['episode_rewards']
-        eval_rewards = self.training_results['eval_rewards']
-        eval_interval = self.training_results['eval_interval']
-        grid_accuracies = self.training_results.get('grid_accuracies', [])
+        # Crear manager de visualización
+        viz_manager = VisualizationManager()
         
-        # Crear subplots si hay métricas adicionales
-        if grid_accuracies:
-            # Crear figura con subplots
-            self.fig.clear()
-            self.ax1 = self.fig.add_subplot(2, 1, 1)
-            self.ax2 = self.fig.add_subplot(2, 1, 2)
-            
-            # Gráfico superior: recompensas
-            self.ax1.plot(episode_rewards, alpha=0.6, label='Episodio', color='blue')
-            
-            if eval_rewards:
-                eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-                self.ax1.plot(eval_episodes, eval_rewards, 'r-', linewidth=2, label='Evaluación')
-            
-            # Promedio móvil
-            window = min(100, len(episode_rewards) // 10)
-            if len(episode_rewards) >= window:
-                moving_avg = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
-                self.ax1.plot(range(window-1, len(episode_rewards)), moving_avg, 'g-', 
-                            linewidth=2, label=f'Promedio móvil ({window})')
-            
-            self.ax1.set_title("Recompensas del Entrenamiento")
-            self.ax1.set_ylabel("Recompensa")
-            self.ax1.legend()
-            self.ax1.grid(True, alpha=0.3)
-            
-            # Gráfico inferior: precisión en grid
-            eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-            self.ax2.plot(eval_episodes, grid_accuracies, 'purple', linewidth=2, marker='o')
-            self.ax2.set_title("Precisión en Grid de Evaluación")
-            self.ax2.set_xlabel("Episodio")
-            self.ax2.set_ylabel("Precisión")
-            self.ax2.grid(True, alpha=0.3)
-            self.ax2.set_ylim(0, 1)
-            
-        else:
-            # Gráfico simple para HNAF estable
-            self.ax.plot(episode_rewards, alpha=0.6, label='Episodio', color='blue')
-            
-            if eval_rewards:
-                eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-                self.ax.plot(eval_episodes, eval_rewards, 'r-', linewidth=2, label='Evaluación')
-            
-            # Promedio móvil
-            window = min(100, len(episode_rewards) // 10)
-            if len(episode_rewards) >= window:
-                moving_avg = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
-                self.ax.plot(range(window-1, len(episode_rewards)), moving_avg, 'g-', 
-                            linewidth=2, label=f'Promedio móvil ({window})')
-            
-            self.ax.set_title("Resultados del Entrenamiento HNAF")
-            self.ax.set_xlabel("Episodio")
-            self.ax.set_ylabel("Recompensa")
-            self.ax.legend()
-            self.ax.grid(True, alpha=0.3)
-        
-        # Actualizar canvas
-        self.canvas.draw()
+        # Actualizar gráficos
+        viz_manager.update_plots(self.fig, self.ax, self.canvas, self.training_results)
     
+
     def clear_output(self):
         """Limpiar la salida de texto"""
         print("DEBUG: Botón 'Limpiar Salida' presionado")
