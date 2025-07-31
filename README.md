@@ -8,7 +8,7 @@ Este repositorio contiene la implementación completa del **Hybrid Normalized Ad
 
 El proyecto incluye una interfaz gráfica completa para controlar y visualizar el entrenamiento del HNAF:
 
-![Interfaz Gráfica HNAF](Screenshot.png)
+![Interfaz Gráfica HNAF](sc2.png)
 
 ### Características de la Interfaz
 
