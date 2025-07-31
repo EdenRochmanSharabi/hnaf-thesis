@@ -16,7 +16,7 @@ class VisualizationManager:
     
     def update_plots(self, fig, canvas, training_results, show_rewards=True, show_precision=True, show_loss=True):
         """
-        Genera y muestra los gráficos seleccionados con un layout dinámico y márgenes perfectos.
+        Genera y muestra los gráficos seleccionados con un layout dinámico que ocupa todo el espacio.
         """
         if not training_results:
             return
@@ -35,25 +35,29 @@ class VisualizationManager:
             canvas.draw()
             return
         
-        # --- Crear layout dinámico ---
+        # --- Crear layout dinámico que ocupe todo el espacio ---
         if num_plots == 1:
             axes = [fig.add_subplot(1, 1, 1)]
         elif num_plots == 2:
             axes = fig.subplots(1, 2)
-        elif num_plots == 3:
+            # Convertir a lista si es necesario
+            if hasattr(axes, '__iter__') and not isinstance(axes, list):
+                axes = list(axes)
+            elif not hasattr(axes, '__iter__'):
+                axes = [axes]
+        else:  # num_plots == 3
             gs = fig.add_gridspec(2, 2)
             ax1 = fig.add_subplot(gs[0, :])
             ax2 = fig.add_subplot(gs[1, 0])
             ax3 = fig.add_subplot(gs[1, 1])
-            axes_map = {'rewards': ax1, 'precision': ax2, 'loss': ax3}
-            axes = [axes_map[plot_name] for plot_name in plots_to_show]
+            axes = [ax1, ax2, ax3]
 
-
-        axes_iter = iter(axes)
+        # Mapear gráficos a ejes
+        plot_axis_map = dict(zip(plots_to_show, axes))
 
         # --- Gráfico de Recompensas ---
-        if 'rewards' in plots_to_show:
-            ax = next(axes_iter)
+        if 'rewards' in plot_axis_map:
+            ax = plot_axis_map['rewards']
             rewards = training_results.get('episode_rewards', [])
             eval_rewards = training_results.get('eval_rewards', [])
             eval_interval = training_results.get('eval_interval', 50)
@@ -70,11 +74,11 @@ class VisualizationManager:
             ax.set_title("Evolución de la Recompensa", fontsize=14, weight='bold')
             ax.set_xlabel("Episodio", fontsize=12)
             ax.set_ylabel("Recompensa", fontsize=12)
-            ax.legend(frameon=True)
+            ax.legend(frameon=True, shadow=True, fancybox=True)
 
         # --- Gráfico de Precisión ---
-        if 'precision' in plots_to_show:
-            ax = next(axes_iter)
+        if 'precision' in plot_axis_map:
+            ax = plot_axis_map['precision']
             grid_accuracies = training_results.get('grid_accuracies', [])
             if grid_accuracies:
                 rewards = training_results.get('episode_rewards', [])
@@ -87,11 +91,11 @@ class VisualizationManager:
             ax.set_title("Precisión de Selección de Modo", fontsize=12, weight='bold')
             ax.set_xlabel("Episodio", fontsize=10)
             ax.set_ylabel("Precisión en Grid", fontsize=10)
-            ax.legend()
+            ax.legend(frameon=True, shadow=True, fancybox=True)
         
         # --- Gráfico de Pérdida ---
-        if 'loss' in plots_to_show:
-            ax = next(axes_iter)
+        if 'loss' in plot_axis_map:
+            ax = plot_axis_map['loss']
             losses = training_results.get('losses', [])
             if losses:
                 loss_ma = np.convolve(losses, np.ones(50)/50, mode='valid') if len(losses) > 50 else losses

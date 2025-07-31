@@ -7,11 +7,13 @@ Punto de entrada para la aplicación modular
 import sys
 import os
 
-# Agregar el directorio padre al path para importar módulos
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Agregar el directorio raíz del proyecto al sys.path
+# para que los módulos 'src' y 'final_app' puedan ser encontrados.
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 
 import tkinter as tk
-from gui_interface import HNAFGUI
+from final_app.gui_interface import HNAFGUI
 
 def main():
     """Función principal"""

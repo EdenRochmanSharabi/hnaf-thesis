@@ -4,6 +4,7 @@ Módulo de entrenamiento para HNAF
 Maneja toda la lógica de entrenamiento
 """
 
+import time
 import numpy as np
 import torch
 from src.hnaf_improved import ImprovedHNAF

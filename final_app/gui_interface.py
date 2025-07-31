@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 
+from final_app.visualization_manager import VisualizationManager
+from final_app.training_manager import TrainingManager
+
 class RedirectText:
     """Clase para redirigir la salida de print a un widget de texto"""
     def __init__(self, text_widget):
@@ -30,23 +33,23 @@ class RedirectText:
 
 class HNAFGUI:
     def __init__(self, root):
-        print("DEBUG: Inicializando HNAFGUI")
+        """Inicializa la GUI."""
         self.root = root
-        self.root.title("HNAF - Control de Hiperparámetros")
+        self.root.title("HNAF Training and Evaluation GUI")
         self.root.geometry("1400x900")
-        self.root.configure(bg='#f0f0f0')
-        print("DEBUG: Ventana configurada")
-        
-        # Variables para almacenar resultados
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
         self.training_results = None
+        self.training_thread = None
+        self.viz_manager = VisualizationManager()
         self.hnaf_model = None
-        
-        # Configurar estilo
-        print("DEBUG: Configurando estilos")
+
+        # Inicializar variables de checkboxes AQUÍ, en el __init__
+        self.show_rewards_var = tk.BooleanVar(value=True)
+        self.show_precision_var = tk.BooleanVar(value=True)
+        self.show_loss_var = tk.BooleanVar(value=True)
+
         self.setup_styles()
-        
-        # Crear interfaz
-        print("DEBUG: Creando widgets")
         self.create_widgets()
         
         # Configurar redirección de salida
@@ -451,13 +454,10 @@ def reward_function(x, y, x0, y0):
         plot_controls_frame = ttk.LabelFrame(parent, text="Controles de Gráficos", padding=10)
         plot_controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(5, 0))
 
-        self.show_rewards_var = tk.BooleanVar(value=True)
-        self.show_precision_var = tk.BooleanVar(value=True)
-        self.show_loss_var = tk.BooleanVar(value=True)
-
-        ttk.Checkbutton(plot_controls_frame, text="Recompensas", variable=self.show_rewards_var, command=self.update_plots).pack(anchor='w')
-        ttk.Checkbutton(plot_controls_frame, text="Precisión", variable=self.show_precision_var, command=self.update_plots).pack(anchor='w')
-        ttk.Checkbutton(plot_controls_frame, text="Pérdida", variable=self.show_loss_var, command=self.update_plots).pack(anchor='w')
+        # El comando solo actualiza la GUI, no el pop-up
+        ttk.Checkbutton(plot_controls_frame, text="Recompensas", variable=self.show_rewards_var, command=self.update_gui_plot).pack(anchor='w')
+        ttk.Checkbutton(plot_controls_frame, text="Precisión", variable=self.show_precision_var, command=self.update_gui_plot).pack(anchor='w')
+        ttk.Checkbutton(plot_controls_frame, text="Pérdida", variable=self.show_loss_var, command=self.update_gui_plot).pack(anchor='w')
 
     def create_output_section(self, parent):
         """Crear sección de salida de texto"""
@@ -471,15 +471,20 @@ def reward_function(x, y, x0, y0):
         self.output_text.pack(fill=tk.BOTH, expand=True)
     
     def create_plots_section(self, parent):
-        """Crear sección de gráficos"""
-        plots_frame = ttk.LabelFrame(parent, text="Gráficos de Resultados", padding=10)
-        plots_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        
-        # Canvas para matplotlib con el nuevo diseño
-        self.fig = plt.Figure(figsize=(8, 6), dpi=100)
+        """Crear la sección de gráficos."""
+        right_pane = ttk.Frame(parent)
+        right_pane.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        plots_frame = ttk.LabelFrame(right_pane, text="Gráficos de Resultados")
+        plots_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Restaurar un figsize fijo para evitar que el layout se rompa
+        self.fig = plt.Figure(figsize=(6, 5), dpi=100)
         self.canvas = FigureCanvasTkAgg(self.fig, master=plots_frame)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-    
+
+        self.create_plot_controls(plots_frame)
+
     def redirect_output(self):
         """Redirigir la salida de print al widget de texto"""
         self.redirect = RedirectText(self.output_text)
@@ -547,7 +552,7 @@ def reward_function(x, y, x0, y0):
     def run_training(self, params):
         """Ejecutar entrenamiento con parámetros dados"""
         # Importar módulo de entrenamiento
-        from training_manager import TrainingManager
+        # from training_manager import TrainingManager # This line is now at the top
         
         try:
             # Crear manager de entrenamiento
@@ -571,13 +576,13 @@ def reward_function(x, y, x0, y0):
         self.status_label.config(text="Entrenamiento completado")
         self.progress_var.set(100)
         
-        # Actualizar gráficos
-        self.update_plots()
-        
-        print("\n" + "="*60)
-        print("ENTRENAMIENTO COMPLETADO EXITOSAMENTE")
-        print("="*60)
-    
+        # Lógica de actualización de gráficos refactorizada
+        self.update_gui_plot()
+        self.show_plots_in_popup()
+
+        self.train_button['state'] = 'normal'
+        self.verify_button['state'] = 'normal'
+
     def training_error(self, error_msg):
         """Llamado cuando hay un error en el entrenamiento"""
         self.train_button.config(state=tk.NORMAL)
@@ -598,7 +603,7 @@ def reward_function(x, y, x0, y0):
         print("="*60)
         
         # Importar módulo de evaluación
-        from evaluation_manager import EvaluationManager
+        from final_app.evaluation_manager import EvaluationManager
         
         # Crear manager de evaluación
         eval_manager = EvaluationManager()
@@ -623,29 +628,57 @@ def reward_function(x, y, x0, y0):
         
         self.hnaf_model.verify_hnaf()
     
-    def update_plots(self):
-        """Actualizar gráficos con los resultados del entrenamiento"""
-        if self.training_results is None:
+    def update_gui_plot(self):
+        """Actualiza solo el gráfico incrustado en la GUI principal."""
+        # Verificar si hay algo que mostrar
+        show_any = self.show_rewards_var.get() or self.show_precision_var.get() or self.show_loss_var.get()
+        
+        if not show_any or self.training_results is None:
+            # Si no hay nada seleccionado o no hay resultados, limpiar el gráfico
+            self.fig.clear()
+            self.canvas.draw()
             return
-        
-        # Importar módulo de visualización
-        from visualization_manager import VisualizationManager
-        
-        # Crear manager de visualización y actualizar gráficos
-        viz_manager = VisualizationManager()
-        viz_manager.update_plots(
-            self.fig, self.canvas, self.training_results,
-            show_rewards=self.show_rewards_var.get(),
-            show_precision=self.show_precision_var.get(),
-            show_loss=self.show_loss_var.get()
-        )
-    
+
+        # Llama al manager para que redibuje en el canvas principal
+        self.viz_manager.update_plots(self.fig, self.canvas, self.training_results,
+                                      show_rewards=self.show_rewards_var.get(),
+                                      show_precision=self.show_precision_var.get(),
+                                      show_loss=self.show_loss_var.get())
+
+    def show_plots_in_popup(self):
+        """Muestra los gráficos en una ventana emergente de alta resolución."""
+        if not self.training_results:
+            return
+
+        popup = tk.Toplevel(self.root)
+        popup.title("Gráficos de Resultados en Alta Resolución")
+        popup.geometry("1200x800")
+
+        # DPI alto para mayor resolución y mostrar todos los gráficos por defecto
+        fig_popup = plt.Figure(figsize=(12, 8), dpi=150)
+        canvas_popup = FigureCanvasTkAgg(fig_popup, master=popup)
+        canvas_popup.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.viz_manager.update_plots(fig_popup, canvas_popup, self.training_results,
+                                      show_rewards=True,
+                                      show_precision=True,
+                                      show_loss=True)
+
+    def run_training_thread(self):
+        """Ejecuta el entrenamiento en un hilo separado."""
+        # ... existing code ...
 
     def clear_output(self):
         """Limpiar la salida de texto"""
         print("DEBUG: Botón 'Limpiar Salida' presionado")
         self.output_text.delete(1.0, tk.END)
         print("DEBUG: Salida limpiada")
+
+    def on_closing(self):
+        """Maneja el evento de cierre de la ventana."""
+        print("DEBUG: Cerrando aplicación")
+        sys.stdout = sys.__stdout__  # Restaurar stdout
+        self.root.destroy()
 
 def main():
     """Función principal"""
@@ -656,12 +689,7 @@ def main():
     print("DEBUG: Interfaz HNAF creada")
     
     # Configurar cierre limpio
-    def on_closing():
-        print("DEBUG: Cerrando aplicación")
-        sys.stdout = sys.__stdout__  # Restaurar stdout
-        root.destroy()
-    
-    root.protocol("WM_DELETE_WINDOW", on_closing)
+    # root.protocol("WM_DELETE_WINDOW", on_closing) # This line is now handled in __init__
     print("DEBUG: Iniciando mainloop")
     root.mainloop()
     print("DEBUG: Aplicación cerrada")
