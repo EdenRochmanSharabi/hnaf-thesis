@@ -181,236 +181,218 @@ class HNAFGUI:
         ttk.Spinbox(training_frame, from_=0.01, to=0.2, increment=0.01, textvariable=self.final_epsilon_var, 
                    format="%.2f", width=10).grid(row=6, column=1, padx=5, pady=2)
         
-        ttk.Label(training_frame, text="Max Steps:", style='Info.TLabel').grid(row=7, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=20, to=100, increment=10, textvariable=self.max_steps_var, 
-                   width=10).grid(row=7, column=1, padx=5, pady=2)
-    
+        # Max Steps
+        max_steps_label = ttk.Label(training_frame, text="Max Steps:")
+        max_steps_label.grid(row=7, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.max_steps_var = tk.StringVar(value="50")
+        max_steps_spinbox = ttk.Spinbox(training_frame, from_=10, to=200, textvariable=self.max_steps_var, width=10)
+        max_steps_spinbox.grid(row=7, column=1, sticky='ew', padx=5, pady=2)
+
+        # Buffer Capacity (Experience Replay)
+        buffer_capacity_label = ttk.Label(training_frame, text="Buffer Capacity:")
+        buffer_capacity_label.grid(row=8, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.buffer_capacity_var = tk.StringVar(value="10000")
+        buffer_capacity_spinbox = ttk.Spinbox(training_frame, from_=1000, to=50000, increment=1000, textvariable=self.buffer_capacity_var, width=10)
+        buffer_capacity_spinbox.grid(row=8, column=1, sticky='ew', padx=5, pady=2)
+
+        # Alpha (Priority Exponent)
+        alpha_label = ttk.Label(training_frame, text="Alpha (Priority):")
+        alpha_label.grid(row=9, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.alpha_var = tk.StringVar(value="0.6")
+        alpha_spinbox = ttk.Spinbox(training_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.alpha_var, width=10)
+        alpha_spinbox.grid(row=9, column=1, sticky='ew', padx=5, pady=2)
+
+        # Beta (Bias Correction)
+        beta_label = ttk.Label(training_frame, text="Beta (Bias Corr.):")
+        beta_label.grid(row=10, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.beta_var = tk.StringVar(value="0.4")
+        beta_spinbox = ttk.Spinbox(training_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.beta_var, width=10)
+        beta_spinbox.grid(row=10, column=1, sticky='ew', padx=5, pady=2)
+
+        # Reward Variance Control
+        reward_variance_label = ttk.Label(training_frame, text="Reward Normalize:")
+        reward_variance_label.grid(row=11, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.reward_normalize_var = tk.BooleanVar(value=True)
+        reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
+        reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
+
     def create_custom_functions_section(self, parent):
-        """Crear sección para funciones personalizadas"""
-        # Frame principal para funciones personalizadas
-        custom_main_frame = ttk.LabelFrame(parent, text="Funciones Personalizadas", padding=10)
-        custom_main_frame.pack(fill=tk.X)
+        """Crear sección de funciones personalizadas"""
+        custom_frame = ttk.LabelFrame(parent, text="Funciones Personalizadas")
+        custom_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Frame izquierdo para editor de código
-        editor_frame = ttk.Frame(custom_main_frame)
-        editor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        # Marco principal organizado horizontalmente
+        main_frame = ttk.Frame(custom_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Label para el editor
-        ttk.Label(editor_frame, text="Editor de Funciones:", style='Header.TLabel').pack(anchor='w')
+        # Columna izquierda - Coordenadas y Matrices
+        left_column = ttk.Frame(main_frame)
+        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
-        # Editor de código
-        print("DEBUG: Creando editor de código")
-        self.code_editor = scrolledtext.ScrolledText(editor_frame, height=15, width=80, 
-                                                   font=('Consolas', 9), bg='#f8f8f8', fg='black')
-        self.code_editor.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
-        print("DEBUG: Editor de código creado y empaquetado")
+        # Coordenadas iniciales
+        coord_frame = ttk.LabelFrame(left_column, text="Coordenadas Iniciales")
+        coord_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Insertar plantilla por defecto
-        print("DEBUG: Llamando a insert_default_template")
-        self.insert_default_template()
+        coord_inner = ttk.Frame(coord_frame)
+        coord_inner.pack(padx=10, pady=10)
         
-        # Frame derecho para controles
-        controls_frame = ttk.Frame(custom_main_frame)
-        controls_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        ttk.Label(coord_inner, text="x0:").grid(row=0, column=0, sticky='w', padx=(0, 5))
+        self.x0_var = tk.StringVar(value="1")
+        ttk.Entry(coord_inner, textvariable=self.x0_var, width=8).grid(row=0, column=1, padx=(0, 20))
         
-        # Botones de control
-        ttk.Button(controls_frame, text="Cargar Plantilla", 
-                  command=self.insert_default_template).pack(pady=5, fill=tk.X)
+        ttk.Label(coord_inner, text="y0:").grid(row=0, column=2, sticky='w', padx=(0, 5))
+        self.y0_var = tk.StringVar(value="1")
+        ttk.Entry(coord_inner, textvariable=self.y0_var, width=8).grid(row=0, column=3)
         
-        ttk.Button(controls_frame, text="Probar Funciones", 
-                  command=self.test_custom_functions).pack(pady=5, fill=tk.X)
+        # Matrices lado a lado
+        matrices_frame = ttk.Frame(left_column)
+        matrices_frame.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Button(controls_frame, text="Guardar Funciones", 
-                  command=self.save_custom_functions).pack(pady=5, fill=tk.X)
+        # Matriz A1
+        a1_frame = ttk.LabelFrame(matrices_frame, text="Matriz A1 (Modo 0)")
+        a1_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         
-        ttk.Button(controls_frame, text="Cargar Funciones", 
-                  command=self.load_custom_functions).pack(pady=5, fill=tk.X)
+        a1_inner = ttk.Frame(a1_frame)
+        a1_inner.pack(padx=10, pady=10)
         
-        # Checkbox para usar funciones personalizadas
+        self.a1_vars = []
+        for i in range(2):
+            row_vars = []
+            for j in range(2):
+                var = tk.StringVar(value=str([[1, 50], [-1, 1]][i][j]))
+                ttk.Entry(a1_inner, textvariable=var, width=8).grid(row=i, column=j, padx=2, pady=2)
+                row_vars.append(var)
+            self.a1_vars.append(row_vars)
+        
+        # Matriz A2
+        a2_frame = ttk.LabelFrame(matrices_frame, text="Matriz A2 (Modo 1)")
+        a2_frame.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        
+        a2_inner = ttk.Frame(a2_frame)
+        a2_inner.pack(padx=10, pady=10)
+        
+        self.a2_vars = []
+        for i in range(2):
+            row_vars = []
+            for j in range(2):
+                var = tk.StringVar(value=str([[1, -1], [50, 1]][i][j]))
+                ttk.Entry(a2_inner, textvariable=var, width=8).grid(row=i, column=j, padx=2, pady=2)
+                row_vars.append(var)
+            self.a2_vars.append(row_vars)
+        
+        # Columna derecha - Función de recompensa y controles
+        right_column = ttk.Frame(main_frame)
+        right_column.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        # Función de recompensa
+        reward_frame = ttk.LabelFrame(right_column, text="Función de Recompensa")
+        reward_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        reward_inner = ttk.Frame(reward_frame)
+        reward_inner.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(reward_inner, text="Expresión (usar x, y, x0, y0):").pack(anchor='w')
+        
+        self.reward_expr_var = tk.StringVar(value="abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))")
+        reward_entry = ttk.Entry(reward_inner, textvariable=self.reward_expr_var, width=50)
+        reward_entry.pack(fill=tk.X, pady=(5, 0))
+        
+        # Checkbox y botones
+        controls_frame = ttk.LabelFrame(right_column, text="Controles")
+        controls_frame.pack(fill=tk.X)
+        
+        controls_inner = ttk.Frame(controls_frame)
+        controls_inner.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Checkbox
         self.use_custom_functions_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(controls_frame, text="Usar Funciones Personalizadas", 
-                       variable=self.use_custom_functions_var).pack(pady=10)
+        ttk.Checkbutton(controls_inner, text="Usar Funciones Personalizadas", 
+                       variable=self.use_custom_functions_var).pack(anchor='w', pady=(0, 10))
         
-        # Label de estado
-        self.custom_status_label = ttk.Label(controls_frame, text="Listo", style='Info.TLabel')
-        self.custom_status_label.pack(pady=5)
-    
-    def insert_default_template(self):
-        """Insertar plantilla por defecto en el editor"""
-        print("DEBUG: Botón 'Cargar Plantilla' presionado")
-        template = '''import numpy as np
-
-# Coordenadas iniciales
-x0, y0 = 1, 1  # puedes cambiar estos valores
-
-# Definimos los vectores x1 y x2
-A1 = np.array([[1, 50],
-               [-1, 1]])
-x1 = A1 @ np.array([[x0], [y0]])
-
-A2 = np.array([[1, -1],
-               [50, 1]])
-x2 = A2 @ np.array([[x0], [y0]])
-
-# Imprimir resultados de las transformaciones
-print("x1 =\\n", x1)
-print("x2 =\\n", x2)
-
-# Función recompensa: minimizar diferencia de distancias al origen
-# Reward = | ||(x, y)|| - ||(x0, y0)|| |
-def reward(x, y, x0, y0):
-    norm_xy = np.linalg.norm([x, y])
-    norm_x0y0 = np.linalg.norm([x0, y0])
-    return abs(norm_xy - norm_x0y0)
-
-# Ejemplo de uso
-x, y = 3, 4  # ejemplo de punto
-r = reward(x, y, x0, y0)
-print("Recompensa:", r)
-
-# Funciones de transformación para cada modo
-def transform_mode_0(x0, y0):
-    """Transformación para el modo 0"""
-    A = np.array([[1, 50],
-                  [-1, 1]])
-    result = A @ np.array([[x0], [y0]])
-    return result[0, 0], result[1, 0]
-
-def transform_mode_1(x0, y0):
-    """Transformación para el modo 1"""
-    A = np.array([[1, -1],
-                  [50, 1]])
-    result = A @ np.array([[x0], [y0]])
-    return result[0, 0], result[1, 0]
-
-# Lista de funciones de transformación (una por modo)
-transformation_functions = [transform_mode_0, transform_mode_1]
-
-# Función de recompensa
-def reward_function(x, y, x0, y0):
-    """Función de recompensa personalizada"""
-    norm_xy = np.linalg.norm([x, y])
-    norm_x0y0 = np.linalg.norm([x0, y0])
-    return abs(norm_xy - norm_x0y0)
-'''
+        # Botones organizados horizontalmente
+        button_frame = ttk.Frame(controls_inner)
+        button_frame.pack(fill=tk.X)
         
-        print("DEBUG: Limpiando editor")
-        self.code_editor.delete(1.0, tk.END)
-        print("DEBUG: Insertando plantilla")
-        self.code_editor.insert(1.0, template)
-        print("DEBUG: Forzando actualización del editor")
-        self.code_editor.update()
-        self.code_editor.see(1.0)  # Mover cursor al inicio
-        print("DEBUG: Plantilla cargada exitosamente")
-        print("DEBUG: Contenido del editor después de cargar:")
-        content = self.code_editor.get(1.0, tk.END)
-        print("DEBUG: Longitud del contenido:", len(content))
-        print("DEBUG: Primeras 100 caracteres:", content[:100])
-    
+        ttk.Button(button_frame, text="Valores Por Defecto", 
+                  command=self.load_default_values).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Probar", 
+                  command=self.test_custom_functions).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Guardar", 
+                  command=self.save_custom_functions).pack(side=tk.LEFT)
+
+    def load_default_values(self):
+        """Cargar valores por defecto"""
+        # Coordenadas
+        self.x0_var.set("1")
+        self.y0_var.set("1")
+        
+        # Matriz A1
+        a1_defaults = [[1, 50], [-1, 1]]
+        for i in range(2):
+            for j in range(2):
+                self.a1_vars[i][j].set(str(a1_defaults[i][j]))
+        
+        # Matriz A2
+        a2_defaults = [[1, -1], [50, 1]]
+        for i in range(2):
+            for j in range(2):
+                self.a2_vars[i][j].set(str(a2_defaults[i][j]))
+        
+        # Función de recompensa
+        self.reward_expr_var.set("abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))")
+        
+        print("✅ Valores por defecto cargados")
+
     def test_custom_functions(self):
         """Probar las funciones personalizadas"""
-        print("DEBUG: Botón 'Probar Funciones' presionado")
         try:
-            # Obtener código del editor
-            code = self.code_editor.get(1.0, tk.END)
-            print("DEBUG: Código obtenido del editor")
+            # Obtener valores
+            x0 = float(self.x0_var.get())
+            y0 = float(self.y0_var.get())
             
-            # Crear namespace local
-            local_namespace = {}
-            
-            # Ejecutar código
-            exec(code, globals(), local_namespace)
-            print("DEBUG: Código ejecutado exitosamente")
-            
-            # Verificar que las funciones necesarias existen
-            required_functions = ['transformation_functions', 'reward_function']
-            missing_functions = [func for func in required_functions if func not in local_namespace]
-            
-            if missing_functions:
-                raise ValueError(f"Faltan las siguientes funciones: {missing_functions}")
-            
-            # Probar las funciones
-            print("="*60)
-            print("PRUEBA DE FUNCIONES PERSONALIZADAS")
-            print("="*60)
+            # Construir matrices
+            A1 = np.array([[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)])
+            A2 = np.array([[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)])
             
             # Probar transformaciones
-            x0, y0 = 1, 1
-            transformation_functions = local_namespace['transformation_functions']
+            coord_vector = np.array([[x0], [y0]])
+            x1 = A1 @ coord_vector
+            x2 = A2 @ coord_vector
             
-            print(f"Estado inicial: ({x0}, {y0})")
-            for i, transform_func in enumerate(transformation_functions):
-                try:
-                    x1, y1 = transform_func(x0, y0)
-                    print(f"Modo {i}: ({x1:.4f}, {y1:.4f})")
-                except Exception as e:
-                    print(f"Error en transformación del modo {i}: {e}")
+            print("🧪 PRUEBA DE FUNCIONES PERSONALIZADAS:")
+            print(f"📍 Coordenadas iniciales: ({x0}, {y0})")
+            print(f"🔄 Matriz A1:\n{A1}")
+            print(f"   Transformación x1: {x1.flatten()}")
+            print(f"🔄 Matriz A2:\n{A2}")
+            print(f"   Transformación x2: {x2.flatten()}")
             
             # Probar función de recompensa
-            reward_func = local_namespace['reward_function']
-            test_x, test_y = 3, 4
-            try:
-                reward = reward_func(test_x, test_y, x0, y0)
-                print(f"Recompensa para ({test_x}, {test_y}): {reward:.4f}")
-            except Exception as e:
-                print(f"Error en función de recompensa: {e}")
+            reward_expr = self.reward_expr_var.get()
+            x, y = 3, 4  # Punto de prueba
             
-            print("="*60)
-            print("PRUEBA COMPLETADA EXITOSAMENTE")
-            print("="*60)
+            # Crear namespace seguro para eval
+            safe_dict = {
+                'x': x, 'y': y, 'x0': x0, 'y0': y0,
+                'np': np, 'abs': abs, 'sqrt': np.sqrt,
+                '__builtins__': {}
+            }
             
-            self.custom_status_label.config(text="Funciones válidas")
+            reward_value = eval(reward_expr, safe_dict)
+            print(f"💰 Función de recompensa para punto ({x}, {y}): {reward_value}")
+            print("✅ Todas las funciones funcionan correctamente")
             
         except Exception as e:
-            error_msg = f"Error al probar funciones: {str(e)}"
-            print(error_msg)
-            self.custom_status_label.config(text="Error en funciones")
-            messagebox.showerror("Error", error_msg)
-    
+            print(f"❌ Error en las funciones personalizadas: {e}")
+
     def save_custom_functions(self):
-        """Guardar funciones personalizadas en archivo"""
-        print("DEBUG: Botón 'Guardar Funciones' presionado")
-        try:
-            code = self.code_editor.get(1.0, tk.END)
-            print("DEBUG: Código obtenido del editor")
-            
-            # Guardar en archivo
-            with open('custom_functions.py', 'w') as f:
-                f.write(code)
-            
-            print("DEBUG: Archivo guardado exitosamente")
-            print("Funciones guardadas en 'custom_functions.py'")
-            self.custom_status_label.config(text="Funciones guardadas")
-            
-        except Exception as e:
-            error_msg = f"Error al guardar: {str(e)}"
-            print(error_msg)
-            messagebox.showerror("Error", error_msg)
-    
-    def load_custom_functions(self):
-        """Cargar funciones personalizadas desde archivo"""
-        print("DEBUG: Botón 'Cargar Funciones' presionado")
-        try:
-            with open('custom_functions.py', 'r') as f:
-                code = f.read()
-            print("DEBUG: Archivo leído exitosamente")
-            
-            self.code_editor.delete(1.0, tk.END)
-            self.code_editor.insert(1.0, code)
-            print("DEBUG: Código cargado en el editor")
-            
-            print("Funciones cargadas desde 'custom_functions.py'")
-            self.custom_status_label.config(text="Funciones cargadas")
-            
-        except FileNotFoundError:
-            print("DEBUG: Archivo no encontrado")
-            print("Archivo 'custom_functions.py' no encontrado")
-            self.custom_status_label.config(text="Archivo no encontrado")
-        except Exception as e:
-            error_msg = f"Error al cargar: {str(e)}"
-            print(error_msg)
-            messagebox.showerror("Error", error_msg)
-    
+        """Guardar funciones personalizadas (placeholder)"""
+        print("💾 Configuración guardada (funcionalidad pendiente)")
+
     def create_control_buttons(self, parent):
         """Crear botones de control"""
         # Frame para botones
@@ -505,20 +487,30 @@ def reward_function(x, y, x0, y0):
         # Verificar si usar funciones personalizadas
         if self.use_custom_functions_var.get():
             try:
-                # Cargar funciones personalizadas
-                code = self.code_editor.get(1.0, tk.END)
-                local_namespace = {}
-                exec(code, globals(), local_namespace)
+                # Construir funciones personalizadas desde los campos de la interfaz
+                x0 = float(self.x0_var.get())
+                y0 = float(self.y0_var.get())
                 
-                # Verificar funciones requeridas
-                if 'transformation_functions' not in local_namespace or 'reward_function' not in local_namespace:
-                    raise ValueError("Faltan las funciones 'transformation_functions' o 'reward_function'")
+                # Construir matrices A1 y A2
+                A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
+                A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
                 
-                params['custom_functions'] = local_namespace
-                print("Usando funciones personalizadas")
+                # Función de recompensa
+                reward_expr = self.reward_expr_var.get()
+                
+                # Almacenar en los parámetros
+                params['custom_functions'] = {
+                    'x0': x0,
+                    'y0': y0,
+                    'A1': A1,
+                    'A2': A2,
+                    'reward_expr': reward_expr
+                }
+                print("Usando configuración personalizada")
                 
             except Exception as e:
-                messagebox.showerror("Error", f"Error en funciones personalizadas: {str(e)}")
+                print(f"Error al procesar funciones personalizadas: {e}")
+                messagebox.showerror("Error", f"Error en funciones personalizadas: {e}")
                 return
         
         # Actualizar interfaz
@@ -546,7 +538,11 @@ def reward_function(x, y, x0, y0):
             'batch_size': self.batch_size_var.get(),
             'initial_epsilon': self.initial_epsilon_var.get(),
             'final_epsilon': self.final_epsilon_var.get(),
-            'max_steps': self.max_steps_var.get()
+            'max_steps': self.max_steps_var.get(),
+            'buffer_capacity': self.buffer_capacity_var.get(),
+            'alpha': self.alpha_var.get(),
+            'beta': self.beta_var.get(),
+            'reward_normalize': self.reward_normalize_var.get()
         }
     
     def run_training(self, params):

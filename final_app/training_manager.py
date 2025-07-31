@@ -34,14 +34,54 @@ class TrainingManager:
             print(f"  - Red: {params['num_layers']} capas de {params['hidden_dim']} unidades")
             print(f"  - ε-greedy decay: {params['initial_epsilon']} -> {params['final_epsilon']}")
             print(f"  - Learning rate: {params['lr']}")
-            print(f"  - Prioritized replay con buffer de 10000")
-            print(f"  - Normalización de estados y recompensas")
+            print(f"  - Prioritized replay con buffer de {params['buffer_capacity']}")
+            print(f"  - Alpha (prioridad): {params['alpha']}, Beta (sesgo): {params['beta']}")
+            print(f"  - Normalización de recompensas: {'Habilitada' if params['reward_normalize'] else 'Deshabilitada'}")
             print(f"  - Reward shaping local")
             print(f"  - Evaluación en grid 100x100")
             print(f"  - Horizonte más largo: {params['max_steps']} pasos")
             
+            # Si hay funciones personalizadas, actualizar el modelo
             if 'custom_functions' in params:
-                print("✅ Usando funciones personalizadas")
+                custom_funcs = params['custom_functions']
+                
+                # Crear funciones de transformación dinámicamente
+                def create_transform_function(matrix):
+                    def transform_func(x, y):
+                        A = np.array(matrix)
+                        result = A @ np.array([[x], [y]])
+                        return float(result[0, 0]), float(result[1, 0])
+                    return transform_func
+                
+                # Crear funciones de transformación para cada modo
+                transform_x1 = create_transform_function(custom_funcs['A1'])
+                transform_x2 = create_transform_function(custom_funcs['A2'])
+                transformation_functions = [transform_x1, transform_x2]
+                
+                # Crear función de recompensa dinámica
+                def custom_reward_function(x, y, x0, y0):
+                    try:
+                        # Crear namespace seguro para eval
+                        safe_dict = {
+                            'x': x, 'y': y, 'x0': x0, 'y0': y0,
+                            'np': np, 'abs': abs, 'sqrt': np.sqrt,
+                            '__builtins__': {}
+                        }
+                        return eval(custom_funcs['reward_expr'], safe_dict)
+                    except Exception as e:
+                        print(f"Error en función de recompensa personalizada: {e}")
+                        # Fallback a función por defecto
+                        return abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
+                
+                # Actualizar el modelo con las funciones personalizadas
+                self.hnaf_model.transformation_functions = transformation_functions
+                self.hnaf_model.reward_function = custom_reward_function
+                
+                print(f"✅ Funciones personalizadas cargadas:")
+                print(f"   - Coordenadas iniciales: ({custom_funcs['x0']}, {custom_funcs['y0']})")
+                print(f"   - Matriz A1: {custom_funcs['A1']}")
+                print(f"   - Matriz A2: {custom_funcs['A2']}")
+                print(f"   - Función de recompensa: {custom_funcs['reward_expr']}")
             else:
                 print("✅ Usando funciones por defecto")
             print()
@@ -59,14 +99,12 @@ class TrainingManager:
                 num_layers=params['num_layers'],
                 lr=params['lr'],
                 tau=params['tau'],
-                gamma=params['gamma']
+                gamma=params['gamma'],
+                buffer_capacity=int(params['buffer_capacity']),
+                alpha=float(params['alpha']),
+                beta=float(params['beta']),
+                reward_normalize=params['reward_normalize']
             )
-            
-            # Si hay funciones personalizadas, actualizar el modelo
-            if 'custom_functions' in params:
-                custom_funcs = params['custom_functions']
-                self.hnaf_model.transformation_functions = custom_funcs['transformation_functions']
-                self.hnaf_model.reward_function = custom_funcs['reward_function']
             
             # Métricas de entrenamiento
             episode_rewards = []

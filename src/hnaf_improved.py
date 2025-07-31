@@ -177,7 +177,8 @@ class ImprovedHNAF:
     """
     
     def __init__(self, state_dim=2, action_dim=2, num_modes=2, 
-                 hidden_dim=64, num_layers=3, lr=1e-6, tau=1e-5, gamma=0.9):
+                 hidden_dim=64, num_layers=3, lr=1e-6, tau=1e-5, gamma=0.9,
+                 buffer_capacity=10000, alpha=0.6, beta=0.4, reward_normalize=True):
         
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -186,6 +187,7 @@ class ImprovedHNAF:
         self.lr = lr
         self.tau = tau
         self.gamma = gamma
+        self.reward_normalize = reward_normalize
         
         # Estadísticas para normalización
         self.state_mean = np.zeros(state_dim)
@@ -193,12 +195,12 @@ class ImprovedHNAF:
         self.reward_mean = 0.0
         self.reward_std = 1.0
         
-        # Redes para cada modo
+        # Networks y optimizers para cada modo
         self.networks = []
         self.target_networks = []
         self.optimizers = []
         
-        for mode in range(num_modes):
+        for i in range(num_modes):
             network = ImprovedNAFNetwork(state_dim, action_dim, hidden_dim, num_layers)
             target_network = ImprovedNAFNetwork(state_dim, action_dim, hidden_dim, num_layers)
             target_network.load_state_dict(network.state_dict())
@@ -207,8 +209,8 @@ class ImprovedHNAF:
             self.target_networks.append(target_network)
             self.optimizers.append(optim.Adam(network.parameters(), lr=lr))
         
-        # Buffer de experiencia priorizado
-        self.replay_buffers = [PrioritizedReplayBuffer() for _ in range(num_modes)]
+        # Buffer de experiencia priorizado con parámetros configurables
+        self.replay_buffers = [PrioritizedReplayBuffer(capacity=buffer_capacity, alpha=alpha, beta=beta) for _ in range(num_modes)]
         
         # NAF verifier para recompensas
         self.naf_verifier = CorrectedOptimizationFunctions(t=1.0)
@@ -237,7 +239,12 @@ class ImprovedHNAF:
         # Asegurar que reward sea escalar
         if hasattr(reward, '__iter__'):
             reward = reward[0] if hasattr(reward, '__getitem__') else float(reward)
-        return (reward - self.reward_mean) / (self.reward_std + 1e-8)
+        
+        # Solo normalizar si está habilitado
+        if self.reward_normalize:
+            return (reward - self.reward_mean) / (self.reward_std + 1e-8)
+        else:
+            return reward
     
     def update_normalization_stats(self, states, rewards):
         """Actualizar estadísticas de normalización"""
