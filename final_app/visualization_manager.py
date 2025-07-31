@@ -6,6 +6,7 @@ Maneja gráficos y visualizaciones
 
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class VisualizationManager:
     """Manager para visualizaciones del HNAF"""
@@ -13,82 +14,96 @@ class VisualizationManager:
     def __init__(self):
         pass
     
-    def update_plots(self, fig, ax, canvas, training_results):
+    def update_plots(self, fig, canvas, training_results, show_rewards=True, show_precision=True, show_loss=True):
         """
-        Actualizar gráficos con los resultados del entrenamiento
-        
-        Args:
-            fig: Figura de matplotlib
-            ax: Ejes de matplotlib
-            canvas: Canvas de tkinter
-            training_results: Resultados del entrenamiento
+        Genera y muestra los gráficos seleccionados con un layout dinámico y márgenes perfectos.
         """
-        if training_results is None:
+        if not training_results:
+            return
+
+        sns.set_theme(style="whitegrid", palette="viridis")
+        fig.clear()
+
+        # Determinar qué gráficos mostrar
+        plots_to_show = []
+        if show_rewards: plots_to_show.append('rewards')
+        if show_precision: plots_to_show.append('precision')
+        if show_loss: plots_to_show.append('loss')
+
+        num_plots = len(plots_to_show)
+        if num_plots == 0:
+            canvas.draw()
             return
         
-        # Datos
-        episode_rewards = training_results['episode_rewards']
-        eval_rewards = training_results['eval_rewards']
-        eval_interval = training_results['eval_interval']
-        grid_accuracies = training_results.get('grid_accuracies', [])
-        
-        # Crear subplots si hay métricas adicionales
-        if grid_accuracies:
-            # Crear figura con subplots
-            fig.clear()
-            ax1 = fig.add_subplot(2, 1, 1)
-            ax2 = fig.add_subplot(2, 1, 2)
+        # --- Crear layout dinámico ---
+        if num_plots == 1:
+            axes = [fig.add_subplot(1, 1, 1)]
+        elif num_plots == 2:
+            axes = fig.subplots(1, 2)
+        elif num_plots == 3:
+            gs = fig.add_gridspec(2, 2)
+            ax1 = fig.add_subplot(gs[0, :])
+            ax2 = fig.add_subplot(gs[1, 0])
+            ax3 = fig.add_subplot(gs[1, 1])
+            axes_map = {'rewards': ax1, 'precision': ax2, 'loss': ax3}
+            axes = [axes_map[plot_name] for plot_name in plots_to_show]
+
+
+        axes_iter = iter(axes)
+
+        # --- Gráfico de Recompensas ---
+        if 'rewards' in plots_to_show:
+            ax = next(axes_iter)
+            rewards = training_results.get('episode_rewards', [])
+            eval_rewards = training_results.get('eval_rewards', [])
+            eval_interval = training_results.get('eval_interval', 50)
             
-            # Gráfico superior: recompensas
-            ax1.plot(episode_rewards, alpha=0.6, label='Episodio', color='blue')
-            
-            if eval_rewards:
-                eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-                ax1.plot(eval_episodes, eval_rewards, 'r-', linewidth=2, label='Evaluación')
-            
-            # Promedio móvil
-            window = min(100, len(episode_rewards) // 10)
-            if len(episode_rewards) >= window:
-                moving_avg = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
-                ax1.plot(range(window-1, len(episode_rewards)), moving_avg, 'g-', 
-                        linewidth=2, label=f'Promedio móvil ({window})')
-            
-            ax1.set_title("Recompensas del Entrenamiento")
-            ax1.set_ylabel("Recompensa")
-            ax1.legend()
-            ax1.grid(True, alpha=0.3)
-            
-            # Gráfico inferior: precisión en grid
-            eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-            ax2.plot(eval_episodes, grid_accuracies, 'purple', linewidth=2, marker='o')
-            ax2.set_title("Precisión en Grid de Evaluación")
-            ax2.set_xlabel("Episodio")
-            ax2.set_ylabel("Precisión")
-            ax2.grid(True, alpha=0.3)
-            ax2.set_ylim(0, 1)
-            
-        else:
-            # Gráfico simple para HNAF estable
-            ax.plot(episode_rewards, alpha=0.6, label='Episodio', color='blue')
+            ax.plot(rewards, color='lightgray', alpha=0.6, label='Recompensa Episodio')
+            if len(rewards) >= 100:
+                moving_avg = np.convolve(rewards, np.ones(100)/100, mode='valid')
+                ax.plot(np.arange(99, len(rewards)), moving_avg, color=sns.color_palette("viridis")[2], linewidth=2, label='Promedio Móvil')
             
             if eval_rewards:
-                eval_episodes = np.arange(eval_interval, len(episode_rewards) + 1, eval_interval)
-                ax.plot(eval_episodes, eval_rewards, 'r-', linewidth=2, label='Evaluación')
-            
-            # Promedio móvil
-            window = min(100, len(episode_rewards) // 10)
-            if len(episode_rewards) >= window:
-                moving_avg = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
-                ax.plot(range(window-1, len(episode_rewards)), moving_avg, 'g-', 
-                        linewidth=2, label=f'Promedio móvil ({window})')
-            
-            ax.set_title("Resultados del Entrenamiento HNAF")
-            ax.set_xlabel("Episodio")
-            ax.set_ylabel("Recompensa")
+                eval_episodes = np.arange(eval_interval, len(rewards) + 1, eval_interval)
+                ax.plot(eval_episodes, eval_rewards, 'o-', color=sns.color_palette("viridis")[0], markersize=5, label='Evaluación')
+
+            ax.set_title("Evolución de la Recompensa", fontsize=14, weight='bold')
+            ax.set_xlabel("Episodio", fontsize=12)
+            ax.set_ylabel("Recompensa", fontsize=12)
+            ax.legend(frameon=True)
+
+        # --- Gráfico de Precisión ---
+        if 'precision' in plots_to_show:
+            ax = next(axes_iter)
+            grid_accuracies = training_results.get('grid_accuracies', [])
+            if grid_accuracies:
+                rewards = training_results.get('episode_rewards', [])
+                eval_interval = training_results.get('eval_interval', 50)
+                eval_episodes = np.arange(eval_interval, len(rewards) + 1, eval_interval)
+                ax.plot(eval_episodes, grid_accuracies, 'o-', color=sns.color_palette("viridis")[3], markersize=5)
+                ax.set_ylim(0, 1)
+                ax.axhline(y=0.5, color='gray', linestyle='--', label='Azar (50%)')
+
+            ax.set_title("Precisión de Selección de Modo", fontsize=12, weight='bold')
+            ax.set_xlabel("Episodio", fontsize=10)
+            ax.set_ylabel("Precisión en Grid", fontsize=10)
             ax.legend()
-            ax.grid(True, alpha=0.3)
         
-        # Actualizar canvas
+        # --- Gráfico de Pérdida ---
+        if 'loss' in plots_to_show:
+            ax = next(axes_iter)
+            losses = training_results.get('losses', [])
+            if losses:
+                loss_ma = np.convolve(losses, np.ones(50)/50, mode='valid') if len(losses) > 50 else losses
+                ax.plot(loss_ma, color=sns.color_palette("viridis")[5])
+                ax.set_yscale('log')
+            
+            ax.set_title("Pérdida del Crítico (Log)", fontsize=12, weight='bold')
+            ax.set_xlabel("Paso de Actualización", fontsize=10)
+            ax.set_ylabel("Pérdida", fontsize=10)
+
+        fig.suptitle("Análisis del Entrenamiento HNAF", fontsize=18, weight='bold')
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
         canvas.draw()
     
     def create_comparison_plot(self, results1, results2, labels=None):

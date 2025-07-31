@@ -6,3 +6,4 @@ gym>=0.21.0
 tensorboard>=2.7.0
 tqdm>=4.62.0
 tkinter 
+seaborn 

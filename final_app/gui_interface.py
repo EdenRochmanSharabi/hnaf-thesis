@@ -87,6 +87,7 @@ class HNAFGUI:
         self.create_network_params(params_frame)
         self.create_training_params(params_frame)
         self.create_control_buttons(params_frame)
+        self.create_plot_controls(params_frame)  # Añadir controles de gráficos
         
         # Frame medio para funciones personalizadas
         custom_frame = ttk.Frame(main_frame, style='Panel.TFrame')
@@ -445,6 +446,19 @@ def reward_function(x, y, x0, y0):
         self.status_label = ttk.Label(button_frame, text="Listo", style='Info.TLabel')
         self.status_label.pack(pady=5)
     
+    def create_plot_controls(self, parent):
+        """Crear controles para seleccionar los gráficos a mostrar."""
+        plot_controls_frame = ttk.LabelFrame(parent, text="Controles de Gráficos", padding=10)
+        plot_controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(5, 0))
+
+        self.show_rewards_var = tk.BooleanVar(value=True)
+        self.show_precision_var = tk.BooleanVar(value=True)
+        self.show_loss_var = tk.BooleanVar(value=True)
+
+        ttk.Checkbutton(plot_controls_frame, text="Recompensas", variable=self.show_rewards_var, command=self.update_plots).pack(anchor='w')
+        ttk.Checkbutton(plot_controls_frame, text="Precisión", variable=self.show_precision_var, command=self.update_plots).pack(anchor='w')
+        ttk.Checkbutton(plot_controls_frame, text="Pérdida", variable=self.show_loss_var, command=self.update_plots).pack(anchor='w')
+
     def create_output_section(self, parent):
         """Crear sección de salida de texto"""
         # Frame para salida
@@ -458,21 +472,13 @@ def reward_function(x, y, x0, y0):
     
     def create_plots_section(self, parent):
         """Crear sección de gráficos"""
-        # Frame para gráficos
         plots_frame = ttk.LabelFrame(parent, text="Gráficos de Resultados", padding=10)
         plots_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        # Canvas para matplotlib
-        self.fig, self.ax = plt.subplots(figsize=(6, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, plots_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Configurar gráfico inicial
-        self.ax.set_title("Resultados del Entrenamiento")
-        self.ax.set_xlabel("Episodio")
-        self.ax.set_ylabel("Recompensa")
-        self.ax.grid(True, alpha=0.3)
-        self.canvas.draw()
+        # Canvas para matplotlib con el nuevo diseño
+        self.fig = plt.Figure(figsize=(8, 6), dpi=100)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plots_frame)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     
     def redirect_output(self):
         """Redirigir la salida de print al widget de texto"""
@@ -625,11 +631,14 @@ def reward_function(x, y, x0, y0):
         # Importar módulo de visualización
         from visualization_manager import VisualizationManager
         
-        # Crear manager de visualización
+        # Crear manager de visualización y actualizar gráficos
         viz_manager = VisualizationManager()
-        
-        # Actualizar gráficos
-        viz_manager.update_plots(self.fig, self.ax, self.canvas, self.training_results)
+        viz_manager.update_plots(
+            self.fig, self.canvas, self.training_results,
+            show_rewards=self.show_rewards_var.get(),
+            show_precision=self.show_precision_var.get(),
+            show_loss=self.show_loss_var.get()
+        )
     
 
     def clear_output(self):
