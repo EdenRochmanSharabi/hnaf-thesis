@@ -126,8 +126,6 @@ class TrainingManager:
                             else:
                                 return fallback_reward
                     
-                    # Configurar la función de recompensa en el modelo
-                    self.hnaf_model.reward_function = gui_reward_function
                 else:
                     print(f"   - Función de recompensa: np.linalg.norm([x, y])")
             print()
@@ -154,6 +152,38 @@ class TrainingManager:
             
             # **NUEVO**: Configurar reward shaping
             self.hnaf_model.reward_shaping_enabled = params.get('reward_shaping', True)
+            
+            # **NUEVO**: Configurar función de recompensa DESPUÉS de crear el modelo
+            if 'gui_reward_function' in params:
+                gui_reward_expr = params['gui_reward_function']
+                
+                # Crear función de recompensa desde la GUI
+                def gui_reward_function(x, y, x0, y0):
+                    try:
+                        # Crear namespace seguro para eval
+                        safe_dict = {
+                            'x': x, 'y': y, 'x0': x0, 'y0': y0,
+                            'np': np, 'abs': abs, 'sqrt': np.sqrt, 'log': np.log,
+                            '__builtins__': {}
+                        }
+                        raw_reward = eval(gui_reward_expr, safe_dict)
+                        
+                        # Aplicar optimización según la selección del usuario
+                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
+                            return -abs(raw_reward)  # Minimizar: hacer negativo
+                        else:
+                            return raw_reward  # Maximizar: mantener positivo
+                    except Exception as e:
+                        print(f"Error en función de recompensa de GUI: {e}")
+                        # Fallback a función por defecto
+                        fallback_reward = abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
+                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
+                            return -fallback_reward
+                        else:
+                            return fallback_reward
+                
+                # Configurar la función de recompensa en el modelo
+                self.hnaf_model.reward_function = gui_reward_function
             
             # Métricas de entrenamiento
             episode_rewards = []
