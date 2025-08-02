@@ -401,7 +401,7 @@ class ImprovedHNAF:
                     if hasattr(x_next, '__iter__'):
                         x_next = x_next[0] if hasattr(x_next, '__getitem__') else float(x_next)
                     if hasattr(y_next, '__iter__'):
-                        y_next = y_next[0] if hasattr(y_next, '__getitem__') else float(y_next)
+                        y_next = y_next[0] if hasattr(y_next, '__iter__') else float(y_next)
                     next_state = np.array([x_next, y_next])
                 except Exception as e:
                     print(f"Error en transformación del modo {mode}: {e}")
@@ -417,16 +417,29 @@ class ImprovedHNAF:
             # **Estabilización del entorno**: Limitar los estados para evitar explosiones
             next_state = np.clip(next_state, -5.0, 5.0)
             
-            # Calcular recompensa base (corrigiendo el reward)
-            norm_diff = abs(np.linalg.norm(next_state) - np.linalg.norm(x0))
-            reward_base = -norm_diff / 15.0  # Normalizar
+            # **MEJORADA**: Calcular recompensa con mejor diferenciación entre modos
+            norm_current = np.linalg.norm(state)
+            norm_next = np.linalg.norm(next_state)
+            norm_initial = np.linalg.norm(x0)
             
-            # Determinar modo óptimo para reward shaping
+            # Recompensa base: minimizar distancia al origen
+            reward_base = -norm_next
+            
+            # **NUEVO**: Penalización por alejarse del origen
+            distance_penalty = -abs(norm_next - norm_initial) * 0.5
+            
+            # **NUEVO**: Bonus por acercarse al origen
+            approach_bonus = 0.1 if norm_next < norm_current else 0.0
+            
+            # **NUEVO**: Penalización por modo subóptimo
             optimal_mode = self._get_optimal_mode(state)
-            mode_bonus = 0.1 if mode == optimal_mode else 0.0
+            mode_penalty = -0.2 if mode != optimal_mode else 0.0
             
-            reward_final = reward_base + mode_bonus
-            reward_final = np.clip(reward_final, -1, 0)
+            # **NUEVO**: Penalización por oscilación
+            oscillation_penalty = -0.1 * abs(norm_next - norm_current) if step > 0 else 0.0
+            
+            reward_final = reward_base + distance_penalty + approach_bonus + mode_penalty + oscillation_penalty
+            reward_final = np.clip(reward_final, -10, 0)
             
             # Almacenar para normalización
             all_states.append(state.copy())
@@ -435,28 +448,42 @@ class ImprovedHNAF:
             # Almacenar transición
             self.step(state, mode, action, reward_final, next_state)
             
+            # Actualizar estado
+            state = next_state.copy()
+            total_reward += reward_final
+            
+            # Guardar datos del episodio
             episode_data.append({
+                'step': step,
                 'state': state.copy(),
                 'mode': mode,
-                'action': action.copy(),
+                'action': action,
                 'reward': reward_final,
                 'next_state': next_state.copy()
             })
             
-            total_reward += reward_final
-            state = next_state.copy()
+            # **NUEVO**: Condición de terminación temprana si se acerca mucho al origen
+            if norm_next < 0.01:
+                break
+        
+        # **NUEVO**: Bonus final por episodio exitoso
+        final_norm = np.linalg.norm(state)
+        if final_norm < 0.1:
+            total_reward += 5.0  # Bonus significativo por éxito
         
         # Actualizar estadísticas de normalización
-        self.update_normalization_stats(all_states, all_rewards)
+        if all_states and all_rewards:
+            self.update_normalization_stats(all_states, all_rewards)
         
         return total_reward, episode_data
     
     def _get_optimal_mode(self, state):
-        """Determinar el modo óptimo para reward shaping"""
-        best_reward = float('inf')
+        """Determinar el modo óptimo para reward shaping - MEJORADO"""
+        best_norm = float('inf')
         optimal_mode = 0
         
         for mode in range(self.num_modes):
+            # Aplicar transformación del modo
             if hasattr(self, 'transformation_functions') and len(self.transformation_functions) > mode:
                 try:
                     x_next, y_next = self.transformation_functions[mode](state[0], state[1])
@@ -464,7 +491,7 @@ class ImprovedHNAF:
                     if hasattr(x_next, '__iter__'):
                         x_next = x_next[0] if hasattr(x_next, '__getitem__') else float(x_next)
                     if hasattr(y_next, '__iter__'):
-                        y_next = y_next[0] if hasattr(y_next, '__getitem__') else float(y_next)
+                        y_next = y_next[0] if hasattr(y_next, '__iter__') else float(y_next)
                     next_state = np.array([x_next, y_next])
                 except Exception as e:
                     print(f"Error en transformación del modo {mode}: {e}")
@@ -477,27 +504,25 @@ class ImprovedHNAF:
                 next_state = A @ state.reshape(-1, 1)
                 next_state = next_state.flatten()
             
-            if hasattr(self, 'reward_function'):
-                try:
-                    reward = self.reward_function(next_state[0], next_state[1], state[0], state[1])
-                except Exception as e:
-                    print(f"Error en función de recompensa: {e}")
-                    reward = 0.0
-            else:
-                try:
-                    reward = self.naf_verifier.execute_function("reward_function", 
-                                                              next_state[0], next_state[1], 
-                                                              state[0], state[1])
-                except Exception as e:
-                    print(f"Error en NAF verifier: {e}")
-                    reward = 0.0
+            # **MEJORADO**: Calcular norma del estado resultante
+            norm_next = np.linalg.norm(next_state)
             
-            # Asegurar que reward sea escalar
-            if hasattr(reward, '__iter__'):
-                reward = reward[0] if hasattr(reward, '__getitem__') else float(reward)
+            # **NUEVO**: Considerar también la estabilidad (evitar explosiones)
+            stability_penalty = 0.0
+            if norm_next > 2.0:  # Penalizar estados muy lejos
+                stability_penalty = norm_next * 0.5
             
-            if abs(reward) < best_reward:
-                best_reward = abs(reward)
+            # **NUEVO**: Considerar la dirección hacia el origen
+            current_norm = np.linalg.norm(state)
+            direction_bonus = 0.0
+            if norm_next < current_norm:  # Si se acerca al origen
+                direction_bonus = -0.1  # Bonus (menor penalización)
+            
+            # **MEJORADO**: Criterio de selección más robusto
+            total_cost = norm_next + stability_penalty + direction_bonus
+            
+            if total_cost < best_norm:
+                best_norm = total_cost
                 optimal_mode = mode
         
         return optimal_mode

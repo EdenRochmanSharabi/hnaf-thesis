@@ -143,7 +143,7 @@ class HNAFGUI:
         training_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         
         # Variables para parámetros de entrenamiento (valores optimizados por defecto)
-        self.learning_rate_var = tk.DoubleVar(value=0.00001)  # 1e-5
+        self.learning_rate_var = tk.DoubleVar(value=0.0001)  # 1e-4
         self.tau_var = tk.DoubleVar(value=0.00001)            # 1e-5
         self.gamma_var = tk.DoubleVar(value=0.9)            # 0.9
         self.num_episodes_var = tk.IntVar(value=1000)       # 1000
