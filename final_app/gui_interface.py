@@ -640,7 +640,8 @@ class HNAFGUI:
             'beta': self.beta_var.get(),
             'reward_normalize': self.reward_normalize_var.get(),
             'reward_shaping': self.reward_shaping_var.get(),
-            'reward_optimization': self.reward_optimization_var.get()
+            'reward_optimization': self.reward_optimization_var.get(),
+            'gui_reward_function': self.reward_expr_var.get()
         }
     
     def run_training(self, params):
