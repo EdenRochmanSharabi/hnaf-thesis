@@ -220,6 +220,47 @@ class HNAFGUI:
         self.reward_normalize_var = tk.BooleanVar(value=True)
         reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
         reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
+        
+        # Separador
+        ttk.Separator(training_frame, orient='horizontal').grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
+        
+        # Sección de optimización automática con Gemini
+        optimization_frame = ttk.LabelFrame(training_frame, text="Optimización Automática con Gemini")
+        optimization_frame.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
+        
+        # Checkbox para activar optimización automática
+        self.use_gemini_optimization_var = tk.BooleanVar(value=False)
+        gemini_check = ttk.Checkbutton(optimization_frame, text="Usar optimización automática con Gemini", 
+                                      variable=self.use_gemini_optimization_var)
+        gemini_check.pack(anchor='w', padx=10, pady=5)
+        
+        # Botones de control de optimización
+        optimization_buttons_frame = ttk.Frame(optimization_frame)
+        optimization_buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.start_optimization_button = ttk.Button(optimization_buttons_frame, text="Iniciar Optimización", 
+                                                   command=self.start_gemini_optimization)
+        self.start_optimization_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.stop_optimization_button = ttk.Button(optimization_buttons_frame, text="Detener Optimización", 
+                                                  command=self.stop_gemini_optimization, state=tk.DISABLED)
+        self.stop_optimization_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.load_best_params_button = ttk.Button(optimization_buttons_frame, text="Cargar Mejores Parámetros", 
+                                                 command=self.load_best_params)
+        self.load_best_params_button.pack(side=tk.LEFT)
+        
+        # Estado de optimización
+        self.optimization_status_var = tk.StringVar(value="Optimización: Inactiva")
+        optimization_status_label = ttk.Label(optimization_frame, textvariable=self.optimization_status_var, 
+                                            style='Info.TLabel')
+        optimization_status_label.pack(anchor='w', padx=10, pady=2)
+        
+        # Progreso de optimización
+        self.optimization_progress_var = tk.DoubleVar()
+        self.optimization_progress_bar = ttk.Progressbar(optimization_frame, variable=self.optimization_progress_var, 
+                                                       maximum=100)
+        self.optimization_progress_bar.pack(fill=tk.X, padx=10, pady=2)
 
     def create_custom_functions_section(self, parent):
         """Crear sección de funciones personalizadas"""
@@ -682,9 +723,103 @@ class HNAFGUI:
         print("DEBUG: Botón 'Limpiar Salida' presionado")
         self.output_text.delete(1.0, tk.END)
         print("DEBUG: Salida limpiada")
+    
+    def start_gemini_optimization(self):
+        """Iniciar optimización automática con Gemini"""
+        try:
+            print("Iniciando optimización automática con Gemini...")
+            
+            # Importar módulo de optimización
+            from final_app.auto_optimizer import AutoOptimizer
+            from final_app.training_manager import TrainingManager
+            
+            # Crear optimizador
+            self.auto_optimizer = AutoOptimizer()
+            self.training_manager = TrainingManager()
+            
+            # Actualizar UI
+            self.start_optimization_button.config(state=tk.DISABLED)
+            self.stop_optimization_button.config(state=tk.NORMAL)
+            self.optimization_status_var.set("Optimización: Ejecutando...")
+            self.optimization_progress_var.set(0)
+            
+            # Callback para actualizar progreso
+            def update_progress(iteration, current_score, best_score):
+                progress = (iteration / 20) * 100  # 20 iteraciones máximo
+                self.optimization_progress_var.set(progress)
+                self.optimization_status_var.set(f"Optimización: Iteración {iteration}/20 - Score: {current_score:.4f} (Mejor: {best_score:.4f})")
+                self.root.update_idletasks()
+            
+            # Iniciar optimización en thread separado
+            self.optimization_thread = self.auto_optimizer.start_optimization(
+                self.training_manager, 
+                callback=update_progress
+            )
+            
+            print("Optimización iniciada en segundo plano")
+            
+        except Exception as e:
+            print(f"❌ Error iniciando optimización: {e}")
+            self.optimization_status_var.set("Optimización: Error")
+    
+    def stop_gemini_optimization(self):
+        """Detener optimización automática"""
+        try:
+            if hasattr(self, 'auto_optimizer'):
+                self.auto_optimizer.stop_optimization()
+            
+            # Actualizar UI
+            self.start_optimization_button.config(state=tk.NORMAL)
+            self.stop_optimization_button.config(state=tk.DISABLED)
+            self.optimization_status_var.set("Optimización: Detenida")
+            
+            print("Optimización detenida")
+            
+        except Exception as e:
+            print(f"❌ Error deteniendo optimización: {e}")
+    
+    def load_best_params(self):
+        """Cargar mejores parámetros encontrados por Gemini"""
+        try:
+            from final_app.auto_optimizer import AutoOptimizer
+            
+            optimizer = AutoOptimizer()
+            best_params = optimizer.get_best_params()
+            
+            if best_params:
+                # Aplicar mejores parámetros a la UI
+                self.hidden_dim_var.set(best_params.get('hidden_dim', 64))
+                self.num_layers_var.set(best_params.get('num_layers', 3))
+                self.learning_rate_var.set(best_params.get('lr', 1e-4))
+                self.batch_size_var.set(best_params.get('batch_size', 32))
+                self.initial_epsilon_var.set(best_params.get('initial_epsilon', 0.5))
+                self.final_epsilon_var.set(best_params.get('final_epsilon', 0.05))
+                self.max_steps_var.set(str(best_params.get('max_steps', 20)))
+                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', 5000)))
+                self.alpha_var.set(str(best_params.get('alpha', 0.6)))
+                self.beta_var.set(str(best_params.get('beta', 0.4)))
+                
+                print("Mejores parámetros cargados desde optimización automática")
+                print(f"   Score: {optimizer.best_score:.4f}")
+                print(f"   Parámetros: {best_params}")
+                
+                messagebox.showinfo("Mejores Parámetros", 
+                                  f"Parámetros optimizados cargados\nScore: {optimizer.best_score:.4f}")
+            else:
+                print("No se encontraron mejores parámetros")
+                messagebox.showwarning("Sin Parámetros", 
+                                     "No se encontraron parámetros optimizados")
+                
+        except Exception as e:
+            print(f"❌ Error cargando mejores parámetros: {e}")
+            messagebox.showerror("Error", f"Error cargando mejores parámetros: {e}")
 
     def on_closing(self):
         """Maneja el evento de cierre de la ventana."""
+        # Detener optimización si está ejecutándose
+        if hasattr(self, 'auto_optimizer') and self.auto_optimizer.is_running:
+            self.auto_optimizer.stop_optimization()
+        
         print("DEBUG: Cerrando aplicación")
         sys.stdout = sys.__stdout__  # Restaurar stdout
         self.root.destroy()

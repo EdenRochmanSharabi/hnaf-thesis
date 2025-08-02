@@ -3,10 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
-
-# Distribution / packaging
+# C distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -128,20 +125,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Thesis specific
-*.pdf
-*.docx
-*.doc
-*.tex
-*.aux
-*.log
-*.out
-*.toc
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.synctex.gz
+# Configuración con API keys
+config.py
+
+# Archivos de mejores hiperparámetros
+best_hyperparameters.json
+best_hyperparameters.csv
 
 # Model checkpoints and data
 *.pth
