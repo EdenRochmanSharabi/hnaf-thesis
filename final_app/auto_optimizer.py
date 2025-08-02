@@ -23,11 +23,11 @@ except ImportError:
     print("⚠️  config.py no encontrado. Usando configuración por defecto.")
     GEMINI_API_KEY = "AIzaSyAmN3fmfw4whoCWMgH88YvBe-bNmwM84B0"
     AUTO_OPTIMIZATION_CONFIG = {
-        "max_iterations": 20,
-        "evaluation_episodes": 100,
-        "timeout_minutes": 30,
-        "best_params_file": "best_hyperparameters.json"
-    }
+    "max_iterations": 50,
+    "evaluation_episodes": 100,
+    "timeout_minutes": 60,
+    "best_params_file": "best_hyperparameters.json"
+}
 
 class AutoOptimizer:
     """Optimizador automático con Gemini"""
@@ -87,22 +87,32 @@ Contexto del problema:
 - Objetivo: Estabilizar sistema seleccionando modo óptimo
 - Función de recompensa: r(x_t, i) = -|‖x_{t+1}‖ - ‖x_t‖|
 
-Parámetros a optimizar:
-1. hidden_dim: [16, 32, 64, 128, 256]
-2. num_layers: [2, 3, 4, 5]
-3. lr: [1e-5, 1e-4, 1e-3, 1e-2]
-4. batch_size: [16, 32, 64, 128]
-5. initial_epsilon: [0.1, 0.3, 0.5, 0.7]
-6. final_epsilon: [0.01, 0.05, 0.1]
-7. max_steps: [10, 20, 30, 50]
-8. buffer_capacity: [1000, 5000, 10000]
-9. alpha: [0.4, 0.6, 0.8]
-10. beta: [0.2, 0.4, 0.6]
+IMPORTANTE: Debes explorar DIVERSIDAD de configuraciones. NO te limites a valores similares.
+
+Parámetros a optimizar (RANGOS AMPLIOS):
+1. hidden_dim: [16, 32, 64, 128, 256, 512] - Explora toda la gama
+2. num_layers: [2, 3, 4, 5, 6] - Prueba diferentes profundidades
+3. lr: [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1] - RANGO AMPLIO de learning rates
+4. batch_size: [8, 16, 32, 64, 128, 256] - Explora diferentes tamaños
+5. initial_epsilon: [0.1, 0.3, 0.5, 0.7, 0.9] - Diferentes niveles de exploración
+6. final_epsilon: [0.001, 0.01, 0.05, 0.1, 0.2] - Rango amplio de explotación
+7. max_steps: [10, 20, 50, 100, 200] - Diferentes horizontes temporales
+8. buffer_capacity: [1000, 5000, 10000, 20000, 50000] - Diferentes capacidades
+9. alpha: [0.1, 0.3, 0.5, 0.7, 0.9] - Diferentes prioridades
+10. beta: [0.1, 0.3, 0.5, 0.7, 0.9] - Diferentes correcciones de sesgo
+
+ESTRATEGIA DE BÚSQUEDA:
+- Varía SIGNIFICATIVAMENTE los parámetros entre iteraciones
+- Prueba learning rates MUY diferentes (1e-6 hasta 1e-1)
+- Explora batch sizes desde 8 hasta 256
+- Prueba max_steps desde 10 hasta 200
+- Varía buffer_capacity desde 1000 hasta 50000
+- NO te quedes en valores similares
 
 Métricas de evaluación:
 - Precisión en grid (0-100%)
-- Recompensa promedio
-- Convergencia estable
+- Recompensa promedio (métrica principal)
+- Score combinado: 0.3 × precisión + 0.7 × recompensa_normalizada
 
 Responde SOLO con un JSON válido con los parámetros optimizados:
 {
@@ -116,11 +126,17 @@ Responde SOLO con un JSON válido con los parámetros optimizados:
     "buffer_capacity": int,
     "alpha": float,
     "beta": float,
-    "reasoning": "explicación de la elección"
+    "reasoning": "explicación de la elección y diversidad explorada"
 }
 """
         
         if current_results:
+            # Analizar diversidad de configuraciones anteriores
+            recent_params = [r['params'] for r in self.optimization_history[-5:]]
+            lr_values = [p.get('lr', 0) for p in recent_params]
+            batch_values = [p.get('batch_size', 0) for p in recent_params]
+            hidden_values = [p.get('hidden_dim', 0) for p in recent_params]
+            
             base_prompt += f"""
 
 Resultados actuales:
@@ -128,10 +144,24 @@ Resultados actuales:
 - Iteración actual: {self.current_iteration}
 - Historial de scores: {[r['score'] for r in self.optimization_history[-5:]]}
 
+ANÁLISIS DE DIVERSIDAD:
+- Learning rates probados: {lr_values}
+- Batch sizes probados: {batch_values}
+- Hidden dims probados: {hidden_values}
+
 Últimos resultados:
 {json.dumps(current_results, indent=2)}
 
-Basándote en estos resultados, sugiere parámetros mejorados.
+INSTRUCCIONES CRÍTICAS:
+- Varía SIGNIFICATIVAMENTE los parámetros
+- Prueba learning rates MUY diferentes (1e-6 hasta 1e-1)
+- Explora batch sizes desde 8 hasta 256
+- Prueba max_steps desde 10 hasta 200
+- Varía buffer_capacity desde 1000 hasta 50000
+- NO repitas configuraciones similares
+- La recompensa es la métrica principal (70% del score)
+
+Basándote en estos resultados, sugiere parámetros DIVERSOS y mejorados.
 """
         
         return base_prompt
@@ -168,19 +198,22 @@ Basándote en estos resultados, sugiere parámetros mejorados.
             return self.get_default_params()
     
     def get_default_params(self):
-        """Parámetros por defecto"""
+        """Parámetros por defecto con mayor diversidad"""
+        import random
+        
+        # Generar parámetros diversos por defecto
         return {
-            "hidden_dim": 64,
-            "num_layers": 3,
-            "lr": 1e-4,
-            "batch_size": 32,
-            "initial_epsilon": 0.5,
-            "final_epsilon": 0.05,
-            "max_steps": 20,
-            "buffer_capacity": 5000,
-            "alpha": 0.6,
-            "beta": 0.4,
-            "reasoning": "Parámetros por defecto (fallback)"
+            "hidden_dim": random.choice([16, 32, 64, 128, 256, 512]),
+            "num_layers": random.choice([2, 3, 4, 5, 6]),
+            "lr": random.choice([1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]),
+            "batch_size": random.choice([8, 16, 32, 64, 128, 256]),
+            "initial_epsilon": random.choice([0.1, 0.3, 0.5, 0.7, 0.9]),
+            "final_epsilon": random.choice([0.001, 0.01, 0.05, 0.1, 0.2]),
+            "max_steps": random.choice([10, 20, 50, 100, 200]),
+            "buffer_capacity": random.choice([1000, 5000, 10000, 20000, 50000]),
+            "alpha": random.choice([0.1, 0.3, 0.5, 0.7, 0.9]),
+            "beta": random.choice([0.1, 0.3, 0.5, 0.7, 0.9]),
+            "reasoning": "Parámetros diversos por defecto (fallback)"
         }
     
     def evaluate_params(self, params, training_manager):
@@ -215,12 +248,15 @@ Basándote en estos resultados, sugiere parámetros mejorados.
                 final_accuracy = training_results['grid_accuracies'][-1] if training_results['grid_accuracies'] else 0
                 avg_reward = np.mean(training_results['episode_rewards'][-50:]) if training_results['episode_rewards'] else 0
                 
-                # Score combinado: precisión + recompensa normalizada
-                score = final_accuracy + max(0, avg_reward / 10)
+                # Normalizar recompensa (asumiendo rango típico -20 a 0)
+                normalized_reward = max(0, (avg_reward + 20) / 20)  # Normalizar a [0,1]
+                
+                # Score combinado: 30% precisión + 70% recompensa (métrica principal)
+                score = 0.3 * final_accuracy + 0.7 * normalized_reward
             else:
                 score = 0
             
-            print(f"   Score: {score:.4f} (precision: {final_accuracy:.2%}, recompensa: {avg_reward:.4f})")
+            print(f"   Score: {score:.4f} (precision: {final_accuracy:.2%}, recompensa: {avg_reward:.4f}, normalizada: {normalized_reward:.3f})")
             
             return {
                 'params': params,
@@ -248,6 +284,7 @@ Basándote en estos resultados, sugiere parámetros mejorados.
         print("Iniciando optimización automática con Gemini")
         print(f"Timeout: {AUTO_OPTIMIZATION_CONFIG['timeout_minutes']} minutos")
         print(f"Maximo iteraciones: {AUTO_OPTIMIZATION_CONFIG['max_iterations']}")
+        print("IMPORTANTE: Explorando diversidad de configuraciones")
         
         while self.is_running and self.current_iteration < AUTO_OPTIMIZATION_CONFIG['max_iterations']:
             try:

@@ -745,9 +745,9 @@ class HNAFGUI:
             
             # Callback para actualizar progreso
             def update_progress(iteration, current_score, best_score):
-                progress = (iteration / 20) * 100  # 20 iteraciones máximo
+                progress = (iteration / 50) * 100  # 50 iteraciones máximo
                 self.optimization_progress_var.set(progress)
-                self.optimization_status_var.set(f"Optimización: Iteración {iteration}/20 - Score: {current_score:.4f} (Mejor: {best_score:.4f})")
+                self.optimization_status_var.set(f"Optimización: Iteración {iteration}/50 - Score: {current_score:.4f} (Mejor: {best_score:.4f})")
                 self.root.update_idletasks()
             
             # Iniciar optimización en thread separado
