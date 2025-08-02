@@ -643,6 +643,9 @@ class HNAFGUI:
             'reward_optimization': self.reward_optimization_var.get(),
             'gui_reward_function': self.reward_expr_var.get()
         }
+        
+        # **DEBUG**: Imprimir la función de recompensa que se está enviando
+        print(f"DEBUG: Función de recompensa de GUI: '{self.reward_expr_var.get()}'")
     
     def run_training(self, params):
         """Ejecutar entrenamiento con parámetros dados"""
