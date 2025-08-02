@@ -37,7 +37,7 @@ class TrainingManager:
             print(f"  - Prioritized replay con buffer de {params['buffer_capacity']}")
             print(f"  - Alpha (prioridad): {params['alpha']}, Beta (sesgo): {params['beta']}")
             print(f"  - Normalización de recompensas: {'Habilitada' if params['reward_normalize'] else 'Deshabilitada'}")
-            print(f"  - Reward shaping local")
+            print(f"  - Reward shaping: {'Habilitado' if params.get('reward_shaping', False) else 'Deshabilitado'}")
             print(f"  - Evaluación en grid 100x100")
             print(f"  - Horizonte más largo: {params['max_steps']} pasos")
             
@@ -93,8 +93,10 @@ class TrainingManager:
                 print(f"   - Matriz A2: {custom_funcs['A2']}")
                 print(f"   - Función de recompensa: {custom_funcs['reward_expr']}")
                 print(f"   - Optimización: {params.get('reward_optimization', 'minimizar')}")
+                print(f"   - Reward shaping: {'Habilitado' if params.get('reward_shaping', False) else 'Deshabilitado'}")
             else:
                 print("✅ Usando funciones por defecto")
+                print(f"   - Función de recompensa: np.linalg.norm([x, y])")
             print()
             
             # Fijar semilla para reproducibilidad

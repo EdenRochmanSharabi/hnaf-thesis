@@ -225,7 +225,7 @@ class HNAFGUI:
         reward_shaping_label = ttk.Label(training_frame, text="Reward Shaping:")
         reward_shaping_label.grid(row=12, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.reward_shaping_var = tk.BooleanVar(value=True)
+        self.reward_shaping_var = tk.BooleanVar(value=False)
         reward_shaping_check = ttk.Checkbutton(training_frame, variable=self.reward_shaping_var)
         reward_shaping_check.grid(row=12, column=1, sticky='w', padx=5, pady=2)
         
