@@ -117,6 +117,9 @@ class TrainingManager:
                 reward_normalize=bool(params['reward_normalize'])
             )
             
+            # **NUEVO**: Configurar reward shaping
+            self.hnaf_model.reward_shaping_enabled = params.get('reward_shaping', True)
+            
             # Métricas de entrenamiento
             episode_rewards = []
             losses = []

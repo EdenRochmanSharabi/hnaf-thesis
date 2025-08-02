@@ -221,12 +221,20 @@ class HNAFGUI:
         reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
         reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
         
+        # Reward Shaping Control
+        reward_shaping_label = ttk.Label(training_frame, text="Reward Shaping:")
+        reward_shaping_label.grid(row=12, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.reward_shaping_var = tk.BooleanVar(value=True)
+        reward_shaping_check = ttk.Checkbutton(training_frame, variable=self.reward_shaping_var)
+        reward_shaping_check.grid(row=12, column=1, sticky='w', padx=5, pady=2)
+        
         # Separador
-        ttk.Separator(training_frame, orient='horizontal').grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Separator(training_frame, orient='horizontal').grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Sección de optimización automática con Gemini
         optimization_frame = ttk.LabelFrame(training_frame, text="Optimización Automática con Gemini")
-        optimization_frame.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
+        optimization_frame.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Checkbox para activar optimización automática
         self.use_gemini_optimization_var = tk.BooleanVar(value=False)
@@ -263,11 +271,11 @@ class HNAFGUI:
         self.optimization_progress_bar.pack(fill=tk.X, padx=10, pady=2)
         
         # Separador
-        ttk.Separator(training_frame, orient='horizontal').grid(row=14, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Separator(training_frame, orient='horizontal').grid(row=15, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Sección de optimización automática con Optuna
         optuna_frame = ttk.LabelFrame(training_frame, text="Optimización Automática con Optuna")
-        optuna_frame.grid(row=15, column=0, columnspan=2, sticky='ew', pady=5)
+        optuna_frame.grid(row=16, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Botones de control de optimización Optuna
         optuna_buttons_frame = ttk.Frame(optuna_frame)
@@ -631,6 +639,7 @@ class HNAFGUI:
             'alpha': self.alpha_var.get(),
             'beta': self.beta_var.get(),
             'reward_normalize': self.reward_normalize_var.get(),
+            'reward_shaping': self.reward_shaping_var.get(),
             'reward_optimization': self.reward_optimization_var.get()
         }
     

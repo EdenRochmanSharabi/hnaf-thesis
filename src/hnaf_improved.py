@@ -417,28 +417,47 @@ class ImprovedHNAF:
             # **Estabilización del entorno**: Limitar los estados para evitar explosiones
             next_state = np.clip(next_state, -5.0, 5.0)
             
-            # **MEJORADA**: Calcular recompensa con mejor diferenciación entre modos
+            # **MEJORADA**: Calcular recompensa usando la función de la GUI como base
             norm_current = np.linalg.norm(state)
             norm_next = np.linalg.norm(next_state)
             norm_initial = np.linalg.norm(x0)
             
-            # Recompensa base: minimizar distancia al origen
-            reward_base = -norm_next
+            # **NUEVO**: Usar la función de recompensa de la GUI como base
+            if hasattr(self, 'reward_function'):
+                try:
+                    # Usar la función de recompensa definida en la GUI
+                    reward_base = self.reward_function(next_state[0], next_state[1], state[0], state[1])
+                    # Asegurar que sea escalar
+                    if hasattr(reward_base, '__iter__'):
+                        reward_base = reward_base[0] if hasattr(reward_base, '__getitem__') else float(reward_base)
+                except Exception as e:
+                    print(f"Error en función de recompensa de GUI: {e}")
+                    # Fallback a función por defecto
+                    reward_base = -norm_next
+            else:
+                # Fallback si no hay función de GUI
+                reward_base = -norm_next
             
-            # **NUEVO**: Penalización por alejarse del origen
-            distance_penalty = -abs(norm_next - norm_initial) * 0.5
+            # **NUEVO**: Aplicar reward shaping solo si está habilitado
+            if hasattr(self, 'reward_shaping_enabled') and self.reward_shaping_enabled:
+                # **NUEVO**: Penalización por alejarse del origen
+                distance_penalty = -abs(norm_next - norm_initial) * 0.5
+                
+                # **NUEVO**: Bonus por acercarse al origen
+                approach_bonus = 0.1 if norm_next < norm_current else 0.0
+                
+                # **NUEVO**: Penalización por modo subóptimo
+                optimal_mode = self._get_optimal_mode(state)
+                mode_penalty = -0.2 if mode != optimal_mode else 0.0
+                
+                # **NUEVO**: Penalización por oscilación
+                oscillation_penalty = -0.1 * abs(norm_next - norm_current) if step > 0 else 0.0
+                
+                reward_final = reward_base + distance_penalty + approach_bonus + mode_penalty + oscillation_penalty
+            else:
+                # **NUEVO**: Usar solo la función de la GUI sin reward shaping
+                reward_final = reward_base
             
-            # **NUEVO**: Bonus por acercarse al origen
-            approach_bonus = 0.1 if norm_next < norm_current else 0.0
-            
-            # **NUEVO**: Penalización por modo subóptimo
-            optimal_mode = self._get_optimal_mode(state)
-            mode_penalty = -0.2 if mode != optimal_mode else 0.0
-            
-            # **NUEVO**: Penalización por oscilación
-            oscillation_penalty = -0.1 * abs(norm_next - norm_current) if step > 0 else 0.0
-            
-            reward_final = reward_base + distance_penalty + approach_bonus + mode_penalty + oscillation_penalty
             reward_final = np.clip(reward_final, -10, 0)
             
             # Almacenar para normalización
