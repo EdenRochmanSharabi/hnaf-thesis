@@ -217,7 +217,7 @@ class HNAFGUI:
         reward_variance_label = ttk.Label(training_frame, text="Reward Normalize:")
         reward_variance_label.grid(row=11, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.reward_normalize_var = tk.BooleanVar(value=True)
+        self.reward_normalize_var = tk.BooleanVar(value=False)
         reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
         reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
         

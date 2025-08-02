@@ -422,7 +422,7 @@ class ImprovedHNAF:
             norm_next = np.linalg.norm(next_state)
             norm_initial = np.linalg.norm(x0)
             
-            # **NUEVO**: Usar la función de recompensa de la GUI como base
+            # **CORREGIDO**: Calcular recompensa de manera más coherente
             if hasattr(self, 'reward_function'):
                 try:
                     # Usar la función de recompensa definida en la GUI
@@ -438,27 +438,28 @@ class ImprovedHNAF:
                 # Fallback si no hay función de GUI
                 reward_base = -norm_next
             
-            # **NUEVO**: Aplicar reward shaping solo si está habilitado
+            # **CORREGIDO**: Aplicar reward shaping solo si está habilitado
             if hasattr(self, 'reward_shaping_enabled') and self.reward_shaping_enabled:
-                # **NUEVO**: Penalización por alejarse del origen
-                distance_penalty = -abs(norm_next - norm_initial) * 0.5
+                # **CORREGIDO**: Penalización por alejarse del origen (más suave)
+                distance_penalty = -abs(norm_next - norm_initial) * 0.1
                 
-                # **NUEVO**: Bonus por acercarse al origen
-                approach_bonus = 0.1 if norm_next < norm_current else 0.0
+                # **CORREGIDO**: Bonus por acercarse al origen (más suave)
+                approach_bonus = 0.05 if norm_next < norm_current else 0.0
                 
-                # **NUEVO**: Penalización por modo subóptimo
+                # **CORREGIDO**: Penalización por modo subóptimo (más suave)
                 optimal_mode = self._get_optimal_mode(state)
-                mode_penalty = -0.2 if mode != optimal_mode else 0.0
+                mode_penalty = -0.1 if mode != optimal_mode else 0.0
                 
-                # **NUEVO**: Penalización por oscilación
-                oscillation_penalty = -0.1 * abs(norm_next - norm_current) if step > 0 else 0.0
+                # **CORREGIDO**: Penalización por oscilación (más suave)
+                oscillation_penalty = -0.05 * abs(norm_next - norm_current) if step > 0 else 0.0
                 
                 reward_final = reward_base + distance_penalty + approach_bonus + mode_penalty + oscillation_penalty
             else:
-                # **NUEVO**: Usar solo la función de la GUI sin reward shaping
+                # **CORREGIDO**: Usar solo la función de la GUI sin reward shaping
                 reward_final = reward_base
             
-            reward_final = np.clip(reward_final, -10, 0)
+            # **CORREGIDO**: Clamp más razonable
+            reward_final = np.clip(reward_final, -5, 1)
             
             # Almacenar para normalización
             all_states.append(state.copy())
@@ -485,10 +486,10 @@ class ImprovedHNAF:
             if norm_next < 0.01:
                 break
         
-        # **NUEVO**: Bonus final por episodio exitoso
+        # **CORREGIDO**: Bonus final por episodio exitoso (más razonable)
         final_norm = np.linalg.norm(state)
         if final_norm < 0.1:
-            total_reward += 5.0  # Bonus significativo por éxito
+            total_reward += 1.0  # Bonus más razonable por éxito
         
         # Actualizar estadísticas de normalización
         if all_states and all_rewards:
