@@ -67,11 +67,21 @@ class TrainingManager:
                             'np': np, 'abs': abs, 'sqrt': np.sqrt,
                             '__builtins__': {}
                         }
-                        return eval(custom_funcs['reward_expr'], safe_dict)
+                        raw_reward = eval(custom_funcs['reward_expr'], safe_dict)
+                        
+                        # Aplicar optimización según la selección del usuario
+                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
+                            return -abs(raw_reward)  # Minimizar: hacer negativo
+                        else:
+                            return raw_reward  # Maximizar: mantener positivo
                     except Exception as e:
                         print(f"Error en función de recompensa personalizada: {e}")
                         # Fallback a función por defecto
-                        return abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
+                        fallback_reward = abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
+                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
+                            return -fallback_reward
+                        else:
+                            return fallback_reward
                 
                 # Actualizar el modelo con las funciones personalizadas
                 self.hnaf_model.transformation_functions = transformation_functions
@@ -82,6 +92,7 @@ class TrainingManager:
                 print(f"   - Matriz A1: {custom_funcs['A1']}")
                 print(f"   - Matriz A2: {custom_funcs['A2']}")
                 print(f"   - Función de recompensa: {custom_funcs['reward_expr']}")
+                print(f"   - Optimización: {params.get('reward_optimization', 'minimizar')}")
             else:
                 print("✅ Usando funciones por defecto")
             print()
@@ -92,18 +103,18 @@ class TrainingManager:
             
             # Crear modelo HNAF mejorado
             self.hnaf_model = ImprovedHNAF(
-                state_dim=params['state_dim'],
-                action_dim=params['action_dim'],
-                num_modes=params['num_modes'],
-                hidden_dim=params['hidden_dim'],
-                num_layers=params['num_layers'],
-                lr=params['lr'],
-                tau=params['tau'],
-                gamma=params['gamma'],
+                state_dim=int(params['state_dim']),
+                action_dim=int(params['action_dim']),
+                num_modes=int(params['num_modes']),
+                hidden_dim=int(params['hidden_dim']),
+                num_layers=int(params['num_layers']),
+                lr=float(params['lr']),
+                tau=float(params['tau']),
+                gamma=float(params['gamma']),
                 buffer_capacity=int(params['buffer_capacity']),
                 alpha=float(params['alpha']),
                 beta=float(params['beta']),
-                reward_normalize=params['reward_normalize']
+                reward_normalize=bool(params['reward_normalize'])
             )
             
             # Métricas de entrenamiento
@@ -114,22 +125,22 @@ class TrainingManager:
             eval_interval = 50
             
             # Entrenamiento mejorado con ε-greedy decay
-            epsilon_decay = (params['initial_epsilon'] - params['final_epsilon']) / params['num_episodes']
+            epsilon_decay = (float(params['initial_epsilon']) - float(params['final_epsilon'])) / int(params['num_episodes'])
             
-            for episode in range(params['num_episodes']):
+            for episode in range(int(params['num_episodes'])):
                 # Calcular epsilon actual
-                epsilon = max(params['final_epsilon'], 
-                            params['initial_epsilon'] - episode * epsilon_decay)
+                epsilon = max(float(params['final_epsilon']), 
+                            float(params['initial_epsilon']) - episode * epsilon_decay)
                 
                 # Entrenar episodio
                 reward, _ = self.hnaf_model.train_episode(
-                    max_steps=params['max_steps'],
+                    max_steps=int(params['max_steps']),
                     epsilon=epsilon
                 )
                 episode_rewards.append(reward)
                 
                 # Actualizar redes
-                loss = self.hnaf_model.update(batch_size=params['batch_size'])
+                loss = self.hnaf_model.update(batch_size=int(params['batch_size']))
                 if loss is not None:
                     losses.append(loss)
                 
@@ -147,7 +158,7 @@ class TrainingManager:
                         grid_results = self.hnaf_model.evaluate_policy_grid(grid_size=50)
                         grid_accuracies.append(grid_results['optimal_accuracy'])
                         
-                        print(f"Episodio {episode+1}/{params['num_episodes']}")
+                        print(f"Episodio {episode+1}/{int(params['num_episodes'])}")
                         print(f"  ε: {epsilon:.3f}")
                         print(f"  Recompensa promedio: {np.mean(episode_rewards[-eval_interval:]):.4f}")
                         print(f"  Recompensa evaluación: {eval_reward:.4f}")
@@ -157,7 +168,7 @@ class TrainingManager:
                             print(f"  Pérdida promedio: {np.mean(losses[-eval_interval:]):.6f}")
                         print()
                     else:
-                        print(f"Episodio {episode+1}/{params['num_episodes']}")
+                        print(f"Episodio {episode+1}/{int(params['num_episodes'])}")
                         print(f"  Recompensa promedio: {np.mean(episode_rewards[-eval_interval:]):.4f}")
                         print(f"  Recompensa evaluación: {eval_reward:.4f}")
                         print(f"  Selección de modos: {mode_selections}")

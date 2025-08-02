@@ -302,6 +302,17 @@ class HNAFGUI:
         reward_entry = ttk.Entry(reward_inner, textvariable=self.reward_expr_var, width=50)
         reward_entry.pack(fill=tk.X, pady=(5, 0))
         
+        # Selector de optimización de recompensa
+        ttk.Label(reward_inner, text="Optimización de recompensa:").pack(anchor='w', pady=(10, 0))
+        self.reward_optimization_var = tk.StringVar(value="minimizar")
+        reward_optimization_frame = ttk.Frame(reward_inner)
+        reward_optimization_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        ttk.Radiobutton(reward_optimization_frame, text="Minimizar", 
+                       variable=self.reward_optimization_var, value="minimizar").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Radiobutton(reward_optimization_frame, text="Maximizar", 
+                       variable=self.reward_optimization_var, value="maximizar").pack(side=tk.LEFT)
+        
         # Checkbox y botones
         controls_frame = ttk.LabelFrame(right_column, text="Controles")
         controls_frame.pack(fill=tk.X)
@@ -345,6 +356,7 @@ class HNAFGUI:
         
         # Función de recompensa
         self.reward_expr_var.set("abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))")
+        self.reward_optimization_var.set("minimizar")
         
         print("✅ Valores por defecto cargados")
 
@@ -542,7 +554,8 @@ class HNAFGUI:
             'buffer_capacity': self.buffer_capacity_var.get(),
             'alpha': self.alpha_var.get(),
             'beta': self.beta_var.get(),
-            'reward_normalize': self.reward_normalize_var.get()
+            'reward_normalize': self.reward_normalize_var.get(),
+            'reward_optimization': self.reward_optimization_var.get()
         }
     
     def run_training(self, params):
