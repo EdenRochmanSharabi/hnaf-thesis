@@ -61,11 +61,17 @@ class ImprovedNAFNetwork(nn.Module):
         
     def _init_weights(self):
         """Inicialización mejorada de pesos"""
-        for module in self.layers + [self.value_head, self.mu_head, self.l_head]:
+        for module in self.layers + [self.value_head, self.mu_head]:
             if hasattr(module, 'weight'):
                 nn.init.xavier_uniform_(module.weight, gain=1.0)
                 if hasattr(module, 'bias') and module.bias is not None:
                     nn.init.constant_(module.bias, 0.0)
+        
+        # Inicialización especial para l_head para evitar elementos diagonales muy pequeños
+        if hasattr(self.l_head, 'weight'):
+            nn.init.xavier_uniform_(self.l_head.weight, gain=0.1)
+            if hasattr(self.l_head, 'bias') and self.l_head.bias is not None:
+                nn.init.constant_(self.l_head.bias, 0.0)
         
     def forward(self, x, training=True):
         """
@@ -95,7 +101,8 @@ class ImprovedNAFNetwork(nn.Module):
         for i in range(self.action_dim):
             for j in range(i + 1):
                 if i == j:
-                    L[:, i, j] = torch.exp(torch.clamp(l_params[:, idx], -5, 5))
+                    # Asegurar que los elementos diagonales no sean muy pequeños
+                    L[:, i, j] = torch.exp(torch.clamp(l_params[:, idx], -3, 3)) + 0.1
                 else:
                     L[:, i, j] = torch.clamp(l_params[:, idx], -1, 1)
                 idx += 1
@@ -298,8 +305,14 @@ class ImprovedHNAF:
         with torch.no_grad():
             V, mu, P = self.networks[mode].get_P_matrix(state_tensor, training=False)
             
-            # Calcular Q-value
-            Q = V + 0.5 * torch.sum(torch.log(torch.diagonal(P, dim1=1, dim2=2)), dim=1)
+            # Calcular Q-value con mejor manejo de valores pequeños
+            # Usar log1p para evitar problemas con valores muy pequeños
+            diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
+            # Asegurar que los elementos diagonales sean positivos y no muy pequeños
+            diagonal_elements = torch.clamp(diagonal_elements, min=1e-6)
+            log_diagonal = torch.log(diagonal_elements)
+            
+            Q = V + 0.5 * torch.sum(log_diagonal, dim=1)
             return Q.item()
     
     def update(self, batch_size=32):
@@ -327,12 +340,18 @@ class ImprovedHNAF:
             
             # Calcular Q-values actuales
             V, mu, P = self.networks[mode].get_P_matrix(states)
-            Q_current = V + 0.5 * torch.sum(torch.log(torch.diagonal(P, dim1=1, dim2=2)), dim=1)
+            diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
+            diagonal_elements = torch.clamp(diagonal_elements, min=1e-6)
+            log_diagonal = torch.log(diagonal_elements)
+            Q_current = V + 0.5 * torch.sum(log_diagonal, dim=1)
             
             # Calcular Q-values objetivo
             with torch.no_grad():
                 V_next, mu_next, P_next = self.target_networks[mode].get_P_matrix(next_states, training=False)
-                Q_next = V_next + 0.5 * torch.sum(torch.log(torch.diagonal(P_next, dim1=1, dim2=2)), dim=1)
+                diagonal_elements_next = torch.diagonal(P_next, dim1=1, dim2=2)
+                diagonal_elements_next = torch.clamp(diagonal_elements_next, min=1e-6)
+                log_diagonal_next = torch.log(diagonal_elements_next)
+                Q_next = V_next + 0.5 * torch.sum(log_diagonal_next, dim=1)
                 Q_target = rewards + self.gamma * Q_next
             
             # Calcular pérdida con pesos de importancia (Huber loss)

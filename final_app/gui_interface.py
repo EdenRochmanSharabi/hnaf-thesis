@@ -261,6 +261,41 @@ class HNAFGUI:
         self.optimization_progress_bar = ttk.Progressbar(optimization_frame, variable=self.optimization_progress_var, 
                                                        maximum=100)
         self.optimization_progress_bar.pack(fill=tk.X, padx=10, pady=2)
+        
+        # Separador
+        ttk.Separator(training_frame, orient='horizontal').grid(row=14, column=0, columnspan=2, sticky='ew', pady=10)
+        
+        # Sección de optimización automática con Optuna
+        optuna_frame = ttk.LabelFrame(training_frame, text="Optimización Automática con Optuna")
+        optuna_frame.grid(row=15, column=0, columnspan=2, sticky='ew', pady=5)
+        
+        # Botones de control de optimización Optuna
+        optuna_buttons_frame = ttk.Frame(optuna_frame)
+        optuna_buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.start_optuna_button = ttk.Button(optuna_buttons_frame, text="Iniciar Optimización Optuna", 
+                                             command=self.start_optuna_optimization)
+        self.start_optuna_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.stop_optuna_button = ttk.Button(optuna_buttons_frame, text="Detener Optimización Optuna", 
+                                            command=self.stop_optuna_optimization, state=tk.DISABLED)
+        self.stop_optuna_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.load_optuna_params_button = ttk.Button(optuna_buttons_frame, text="Cargar Mejores Parámetros Optuna", 
+                                                   command=self.load_optuna_params)
+        self.load_optuna_params_button.pack(side=tk.LEFT)
+        
+        # Estado de optimización Optuna
+        self.optuna_status_var = tk.StringVar(value="Optimización Optuna: Inactiva")
+        optuna_status_label = ttk.Label(optuna_frame, textvariable=self.optuna_status_var, 
+                                       style='Info.TLabel')
+        optuna_status_label.pack(anchor='w', padx=10, pady=2)
+        
+        # Progreso de optimización Optuna
+        self.optuna_progress_var = tk.DoubleVar()
+        self.optuna_progress_bar = ttk.Progressbar(optuna_frame, variable=self.optuna_progress_var, 
+                                                  maximum=100)
+        self.optuna_progress_bar.pack(fill=tk.X, padx=10, pady=2)
 
     def create_custom_functions_section(self, parent):
         """Crear sección de funciones personalizadas"""
@@ -339,7 +374,7 @@ class HNAFGUI:
         
         ttk.Label(reward_inner, text="Expresión (usar x, y, x0, y0):").pack(anchor='w')
         
-        self.reward_expr_var = tk.StringVar(value="abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))")
+        self.reward_expr_var = tk.StringVar(value="np.linalg.norm([x, y])")
         reward_entry = ttk.Entry(reward_inner, textvariable=self.reward_expr_var, width=50)
         reward_entry.pack(fill=tk.X, pady=(5, 0))
         
@@ -396,7 +431,7 @@ class HNAFGUI:
                 self.a2_vars[i][j].set(str(a2_defaults[i][j]))
         
         # Función de recompensa
-        self.reward_expr_var.set("abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))")
+        self.reward_expr_var.set("np.linalg.norm([x, y])")
         self.reward_optimization_var.set("minimizar")
         
         print("✅ Valores por defecto cargados")
@@ -813,12 +848,93 @@ class HNAFGUI:
         except Exception as e:
             print(f"❌ Error cargando mejores parámetros: {e}")
             messagebox.showerror("Error", f"Error cargando mejores parámetros: {e}")
+    
+    def start_optuna_optimization(self):
+        """Iniciar optimización automática con Optuna"""
+        try:
+            print("Iniciando optimización automática con Optuna...")
+            
+            # Importar módulo de optimización Optuna
+            from final_app.optuna_optimizer import OptunaOptimizer
+            
+            # Crear optimizador Optuna
+            self.optuna_optimizer = OptunaOptimizer()
+            
+            # Actualizar UI
+            self.start_optuna_button.config(state=tk.DISABLED)
+            self.stop_optuna_button.config(state=tk.NORMAL)
+            self.optuna_status_var.set("Optimización Optuna: Ejecutando...")
+            self.optuna_progress_var.set(0)
+            
+            # Callback para actualizar progreso
+            def update_optuna_progress(iteration, current_score, best_score):
+                progress = (iteration / 50) * 100  # 50 iteraciones máximo
+                self.optuna_progress_var.set(progress)
+                self.optuna_status_var.set(f"Optimización Optuna: Iteración {iteration}/50 - Score: {current_score:.4f} (Mejor: {best_score:.4f})")
+                self.root.update_idletasks()
+            
+            # Iniciar optimización en thread separado
+            self.optuna_optimizer.start_optimization(progress_callback=update_optuna_progress)
+            
+            print("Optimización Optuna iniciada en segundo plano")
+            
+        except Exception as e:
+            print(f"Error iniciando optimización Optuna: {e}")
+            self.optuna_status_var.set("Optimización Optuna: Error")
+    
+    def stop_optuna_optimization(self):
+        """Detener optimización automática con Optuna"""
+        try:
+            if hasattr(self, 'optuna_optimizer'):
+                self.optuna_optimizer.stop_optimization()
+            
+            # Actualizar UI
+            self.start_optuna_button.config(state=tk.NORMAL)
+            self.stop_optuna_button.config(state=tk.DISABLED)
+            self.optuna_status_var.set("Optimización Optuna: Detenida")
+            
+            print("Optimización Optuna detenida")
+            
+        except Exception as e:
+            print(f"Error deteniendo optimización Optuna: {e}")
+    
+    def load_optuna_params(self):
+        """Cargar mejores parámetros encontrados por Optuna"""
+        try:
+            from final_app.optuna_optimizer import OptunaOptimizer
+            
+            optimizer = OptunaOptimizer()
+            best_params = optimizer.get_best_params()
+            
+            if best_params:
+                # Aplicar mejores parámetros a la UI
+                self.hidden_dim_var.set(best_params.get('hidden_dim', 64))
+                self.num_layers_var.set(best_params.get('num_layers', 3))
+                self.learning_rate_var.set(best_params.get('lr', 1e-3))
+                self.batch_size_var.set(best_params.get('batch_size', 64))
+                self.initial_epsilon_var.set(best_params.get('initial_epsilon', 0.5))
+                self.final_epsilon_var.set(best_params.get('final_epsilon', 0.01))
+                self.max_steps_var.set(str(best_params.get('max_steps', 30)))
+                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', 5000)))
+                self.alpha_var.set(str(best_params.get('alpha', 0.6)))
+                self.beta_var.set(str(best_params.get('beta', 0.4)))
+                
+                print("Mejores parámetros de Optuna aplicados a la interfaz")
+            else:
+                print("No se encontraron parámetros optimizados de Optuna")
+                
+        except Exception as e:
+            print(f"Error cargando mejores parámetros de Optuna: {e}")
 
     def on_closing(self):
         """Maneja el evento de cierre de la ventana."""
-        # Detener optimización si está ejecutándose
+        # Detener optimización Gemini si está ejecutándose
         if hasattr(self, 'auto_optimizer') and self.auto_optimizer.is_running:
             self.auto_optimizer.stop_optimization()
+        
+        # Detener optimización Optuna si está ejecutándose
+        if hasattr(self, 'optuna_optimizer') and self.optuna_optimizer.is_running:
+            self.optuna_optimizer.stop_optimization()
         
         print("DEBUG: Cerrando aplicación")
         sys.stdout = sys.__stdout__  # Restaurar stdout

@@ -131,6 +131,7 @@ config.py
 # Archivos de mejores hiperparámetros
 best_hyperparameters.json
 best_hyperparameters.csv
+best_hyperparameters_optuna.json
 
 # Model checkpoints and data
 *.pth
