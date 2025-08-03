@@ -40,11 +40,10 @@ class RedirectText:
         pass
 
 class HNAFGUI:
-    def __init__(self, root):
-        """Inicializa la GUI."""
+    def __init__(self, root, config_manager):
+        """Inicializa la GUI SIN valores hardcodeados."""
         self.root = root
-        self.root.title("HNAF Training and Evaluation GUI")
-        self.root.geometry("1400x900")
+        self.config_manager = config_manager
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.training_results = None
@@ -52,10 +51,13 @@ class HNAFGUI:
         self.viz_manager = VisualizationManager()
         self.hnaf_model = None
 
-        # Inicializar variables de checkboxes AQUÍ, en el __init__
-        self.show_rewards_var = tk.BooleanVar(value=True)
-        self.show_precision_var = tk.BooleanVar(value=True)
-        self.show_loss_var = tk.BooleanVar(value=True)
+        # Inicializar variables de checkboxes desde configuración
+        self.interface_config = self.config_manager.get_interface_config()
+        self.checkbox_defaults = self.interface_config['checkboxes']
+        
+        self.show_rewards_var = tk.BooleanVar(value=self.checkbox_defaults['show_rewards'])
+        self.show_precision_var = tk.BooleanVar(value=self.checkbox_defaults['show_precision'])
+        self.show_loss_var = tk.BooleanVar(value=self.checkbox_defaults['show_loss'])
 
         self.setup_styles()
         self.create_widgets()
@@ -121,28 +123,37 @@ class HNAFGUI:
         network_frame = ttk.LabelFrame(parent, text="Parámetros de Red Neuronal", padding=10)
         network_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        # Variables para parámetros de red (valores optimizados por defecto)
-        self.state_dim_var = tk.IntVar(value=2)
-        self.action_dim_var = tk.IntVar(value=2)
-        self.num_modes_var = tk.IntVar(value=2)
-        self.hidden_dim_var = tk.IntVar(value=64)  # Optimizado
-        self.num_layers_var = tk.IntVar(value=3)   # Optimizado
+        # Variables para parámetros de red desde configuración
+        network_defaults = self.config_manager.get_network_defaults()
         
-        # Crear controles
+        self.state_dim_var = tk.IntVar(value=network_defaults['state_dim'])
+        self.action_dim_var = tk.IntVar(value=network_defaults['action_dim'])
+        self.num_modes_var = tk.IntVar(value=network_defaults['num_modes'])
+        self.hidden_dim_var = tk.IntVar(value=network_defaults['hidden_dim'])
+        self.num_layers_var = tk.IntVar(value=network_defaults['num_layers'])
+        
+        # Crear controles con rangos desde configuración
+        network_ranges = self.config_manager.get_network_ranges()
+        
         ttk.Label(network_frame, text="Dimensión del Estado:", style='Info.TLabel').grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Spinbox(network_frame, from_=1, to=10, textvariable=self.state_dim_var, width=10).grid(row=0, column=1, padx=5, pady=2)
+        ttk.Spinbox(network_frame, from_=network_ranges['state_dim'][0], to=network_ranges['state_dim'][1], 
+                   textvariable=self.state_dim_var, width=10).grid(row=0, column=1, padx=5, pady=2)
         
         ttk.Label(network_frame, text="Dimensión de Acción:", style='Info.TLabel').grid(row=1, column=0, sticky='w', pady=2)
-        ttk.Spinbox(network_frame, from_=1, to=10, textvariable=self.action_dim_var, width=10).grid(row=1, column=1, padx=5, pady=2)
+        ttk.Spinbox(network_frame, from_=network_ranges['action_dim'][0], to=network_ranges['action_dim'][1], 
+                   textvariable=self.action_dim_var, width=10).grid(row=1, column=1, padx=5, pady=2)
         
         ttk.Label(network_frame, text="Número de Modos:", style='Info.TLabel').grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Spinbox(network_frame, from_=1, to=5, textvariable=self.num_modes_var, width=10).grid(row=2, column=1, padx=5, pady=2)
+        ttk.Spinbox(network_frame, from_=network_ranges['num_modes'][0], to=network_ranges['num_modes'][1], 
+                   textvariable=self.num_modes_var, width=10).grid(row=2, column=1, padx=5, pady=2)
         
         ttk.Label(network_frame, text="Capas Ocultas:", style='Info.TLabel').grid(row=3, column=0, sticky='w', pady=2)
-        ttk.Spinbox(network_frame, from_=16, to=256, increment=16, textvariable=self.hidden_dim_var, width=10).grid(row=3, column=1, padx=5, pady=2)
+        ttk.Spinbox(network_frame, from_=network_ranges['hidden_dim'][0], to=network_ranges['hidden_dim'][1], 
+                   increment=network_ranges['hidden_dim_increment'], textvariable=self.hidden_dim_var, width=10).grid(row=3, column=1, padx=5, pady=2)
         
         ttk.Label(network_frame, text="Número de Capas:", style='Info.TLabel').grid(row=4, column=0, sticky='w', pady=2)
-        ttk.Spinbox(network_frame, from_=2, to=5, textvariable=self.num_layers_var, width=10).grid(row=4, column=1, padx=5, pady=2)
+        ttk.Spinbox(network_frame, from_=network_ranges['num_layers'][0], to=network_ranges['num_layers'][1], 
+                   textvariable=self.num_layers_var, width=10).grid(row=4, column=1, padx=5, pady=2)
     
     def create_training_params(self, parent):
         """Crear sección de parámetros de entrenamiento"""
@@ -150,90 +161,112 @@ class HNAFGUI:
         training_frame = ttk.LabelFrame(parent, text="Parámetros de Entrenamiento", padding=10)
         training_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         
-        # Variables para parámetros de entrenamiento (valores optimizados por defecto)
-        self.learning_rate_var = tk.DoubleVar(value=0.0001)  # 1e-4
-        self.tau_var = tk.DoubleVar(value=0.00001)            # 1e-5
-        self.gamma_var = tk.DoubleVar(value=0.9)            # 0.9
-        self.num_episodes_var = tk.IntVar(value=1000)       # 1000
-        self.batch_size_var = tk.IntVar(value=64)           # 64 (aumentado)
-        self.initial_epsilon_var = tk.DoubleVar(value=0.5)  # ε inicial optimizado
-        self.final_epsilon_var = tk.DoubleVar(value=0.05)   # ε final optimizado
-        self.max_steps_var = tk.IntVar(value=50)            # Horizonte optimizado
+        # Variables para parámetros de entrenamiento desde configuración
+        training_defaults = self.config_manager.get_training_defaults()
         
-        # Crear controles
+        self.learning_rate_var = tk.DoubleVar(value=training_defaults['learning_rate'])
+        self.tau_var = tk.DoubleVar(value=training_defaults['tau'])
+        self.gamma_var = tk.DoubleVar(value=training_defaults['gamma'])
+        self.num_episodes_var = tk.IntVar(value=training_defaults['num_episodes'])
+        self.batch_size_var = tk.IntVar(value=training_defaults['batch_size'])
+        self.initial_epsilon_var = tk.DoubleVar(value=training_defaults['initial_epsilon'])
+        self.final_epsilon_var = tk.DoubleVar(value=training_defaults['final_epsilon'])
+        self.max_steps_var = tk.IntVar(value=training_defaults['max_steps'])
+        
+        # Crear controles con rangos desde configuración
+        training_ranges = self.config_manager.get_training_ranges()
+        
         ttk.Label(training_frame, text="Learning Rate:", style='Info.TLabel').grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=0.0001, to=0.1, increment=0.0001, textvariable=self.learning_rate_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['learning_rate'][0], to=training_ranges['learning_rate'][1], 
+                   increment=training_ranges['learning_rate_increment'], textvariable=self.learning_rate_var, 
                    format="%.4f", width=10).grid(row=0, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="Tau (Soft Update):", style='Info.TLabel').grid(row=1, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=0.0001, to=0.01, increment=0.0001, textvariable=self.tau_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['tau'][0], to=training_ranges['tau'][1], 
+                   increment=training_ranges['tau_increment'], textvariable=self.tau_var, 
                    format="%.4f", width=10).grid(row=1, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="Gamma (Discount):", style='Info.TLabel').grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=0.8, to=0.999, increment=0.001, textvariable=self.gamma_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['gamma'][0], to=training_ranges['gamma'][1], 
+                   increment=training_ranges['gamma_increment'], textvariable=self.gamma_var, 
                    format="%.3f", width=10).grid(row=2, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="Episodios:", style='Info.TLabel').grid(row=3, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=100, to=5000, increment=100, textvariable=self.num_episodes_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['num_episodes'][0], to=training_ranges['num_episodes'][1], 
+                   increment=training_ranges['episodes_increment'], textvariable=self.num_episodes_var, 
                    width=10).grid(row=3, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="Batch Size:", style='Info.TLabel').grid(row=4, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=8, to=128, increment=8, textvariable=self.batch_size_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['batch_size'][0], to=training_ranges['batch_size'][1], 
+                   increment=training_ranges['batch_size_increment'], textvariable=self.batch_size_var, 
                    width=10).grid(row=4, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="ε Inicial:", style='Info.TLabel').grid(row=5, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=0.1, to=1.0, increment=0.05, textvariable=self.initial_epsilon_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['initial_epsilon'][0], to=training_ranges['initial_epsilon'][1], 
+                   increment=training_ranges['epsilon_increment'], textvariable=self.initial_epsilon_var, 
                    format="%.2f", width=10).grid(row=5, column=1, padx=5, pady=2)
         
         ttk.Label(training_frame, text="ε Final:", style='Info.TLabel').grid(row=6, column=0, sticky='w', pady=2)
-        ttk.Spinbox(training_frame, from_=0.01, to=0.2, increment=0.01, textvariable=self.final_epsilon_var, 
+        ttk.Spinbox(training_frame, from_=training_ranges['final_epsilon'][0], to=training_ranges['final_epsilon'][1], 
+                   increment=training_ranges['final_epsilon_increment'], textvariable=self.final_epsilon_var, 
                    format="%.2f", width=10).grid(row=6, column=1, padx=5, pady=2)
         
         # Max Steps
         max_steps_label = ttk.Label(training_frame, text="Max Steps:")
         max_steps_label.grid(row=7, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.max_steps_var = tk.StringVar(value="50")
-        max_steps_spinbox = ttk.Spinbox(training_frame, from_=10, to=200, textvariable=self.max_steps_var, width=10)
+        # Usar variable ya definida arriba (convertir a StringVar si es necesario)
+        self.max_steps_var = tk.StringVar(value=str(training_defaults['max_steps']))
+        max_steps_spinbox = ttk.Spinbox(training_frame, from_=training_ranges['max_steps'][0], 
+                                       to=training_ranges['max_steps'][1], textvariable=self.max_steps_var, width=10)
         max_steps_spinbox.grid(row=7, column=1, sticky='ew', padx=5, pady=2)
 
         # Buffer Capacity (Experience Replay)
         buffer_capacity_label = ttk.Label(training_frame, text="Buffer Capacity:")
         buffer_capacity_label.grid(row=8, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.buffer_capacity_var = tk.StringVar(value="10000")
-        buffer_capacity_spinbox = ttk.Spinbox(training_frame, from_=1000, to=50000, increment=1000, textvariable=self.buffer_capacity_var, width=10)
+        self.buffer_capacity_var = tk.StringVar(value=str(training_defaults['buffer_capacity']))
+        buffer_capacity_spinbox = ttk.Spinbox(training_frame, from_=training_ranges['buffer_capacity'][0], 
+                                             to=training_ranges['buffer_capacity'][1], 
+                                             increment=training_ranges['buffer_increment'], 
+                                             textvariable=self.buffer_capacity_var, width=10)
         buffer_capacity_spinbox.grid(row=8, column=1, sticky='ew', padx=5, pady=2)
 
         # Alpha (Priority Exponent)
         alpha_label = ttk.Label(training_frame, text="Alpha (Priority):")
         alpha_label.grid(row=9, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.alpha_var = tk.StringVar(value="0.6")
-        alpha_spinbox = ttk.Spinbox(training_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.alpha_var, width=10)
+        self.alpha_var = tk.StringVar(value=str(training_defaults['alpha']))
+        alpha_spinbox = ttk.Spinbox(training_frame, from_=training_ranges['alpha'][0], 
+                                   to=training_ranges['alpha'][1], 
+                                   increment=training_ranges['priority_increment'], 
+                                   textvariable=self.alpha_var, width=10)
         alpha_spinbox.grid(row=9, column=1, sticky='ew', padx=5, pady=2)
 
         # Beta (Bias Correction)
         beta_label = ttk.Label(training_frame, text="Beta (Bias Corr.):")
         beta_label.grid(row=10, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.beta_var = tk.StringVar(value="0.4")
-        beta_spinbox = ttk.Spinbox(training_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.beta_var, width=10)
+        self.beta_var = tk.StringVar(value=str(training_defaults['beta']))
+        beta_spinbox = ttk.Spinbox(training_frame, from_=training_ranges['beta'][0], 
+                                  to=training_ranges['beta'][1], 
+                                  increment=training_ranges['priority_increment'], 
+                                  textvariable=self.beta_var, width=10)
         beta_spinbox.grid(row=10, column=1, sticky='ew', padx=5, pady=2)
 
-        # Reward Variance Control
+        # Reward Variance Control (desde configuración)
         reward_variance_label = ttk.Label(training_frame, text="Reward Normalize:")
         reward_variance_label.grid(row=11, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.reward_normalize_var = tk.BooleanVar(value=False)
+        self.reward_normalize_var = tk.BooleanVar(value=self.checkbox_defaults['reward_normalize'])
         reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
         reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
         
-        # Reward Shaping Control
+        # Reward Shaping Control (desde configuración)
         reward_shaping_label = ttk.Label(training_frame, text="Reward Shaping:")
         reward_shaping_label.grid(row=12, column=0, sticky='w', padx=(10, 5), pady=2)
         
-        self.reward_shaping_var = tk.BooleanVar(value=False)
+        self.reward_shaping_var = tk.BooleanVar(value=self.checkbox_defaults['reward_shaping'])
         reward_shaping_check = ttk.Checkbutton(training_frame, variable=self.reward_shaping_var)
         reward_shaping_check.grid(row=12, column=1, sticky='w', padx=5, pady=2)
         
@@ -245,7 +278,7 @@ class HNAFGUI:
         optimization_frame.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Checkbox para activar optimización automática
-        self.use_gemini_optimization_var = tk.BooleanVar(value=False)
+        self.use_gemini_optimization_var = tk.BooleanVar(value=self.checkbox_defaults['use_gemini_optimization'])
         gemini_check = ttk.Checkbutton(optimization_frame, text="Usar optimización automática con Gemini", 
                                       variable=self.use_gemini_optimization_var)
         gemini_check.pack(anchor='w', padx=10, pady=5)
@@ -266,8 +299,9 @@ class HNAFGUI:
                                                  command=self.load_best_params)
         self.load_best_params_button.pack(side=tk.LEFT)
         
-        # Estado de optimización
-        self.optimization_status_var = tk.StringVar(value="Optimización: Inactiva")
+        # Estado de optimización (desde configuración)
+        status_messages = self.interface_config['status_messages']
+        self.optimization_status_var = tk.StringVar(value=status_messages['optimization_inactive'])
         optimization_status_label = ttk.Label(optimization_frame, textvariable=self.optimization_status_var, 
                                             style='Info.TLabel')
         optimization_status_label.pack(anchor='w', padx=10, pady=2)
@@ -301,8 +335,8 @@ class HNAFGUI:
                                                    command=self.load_optuna_params)
         self.load_optuna_params_button.pack(side=tk.LEFT)
         
-        # Estado de optimización Optuna
-        self.optuna_status_var = tk.StringVar(value="Optimización Optuna: Inactiva")
+        # Estado de optimización Optuna (desde configuración)
+        self.optuna_status_var = tk.StringVar(value=status_messages['optuna_inactive'])
         optuna_status_label = ttk.Label(optuna_frame, textvariable=self.optuna_status_var, 
                                        style='Info.TLabel')
         optuna_status_label.pack(anchor='w', padx=10, pady=2)
@@ -333,12 +367,15 @@ class HNAFGUI:
         coord_inner = ttk.Frame(coord_frame)
         coord_inner.pack(padx=10, pady=10)
         
+        # Coordenadas desde configuración
+        defaults_config = self.config_manager.get_defaults_config()
+        
         ttk.Label(coord_inner, text="x0:").grid(row=0, column=0, sticky='w', padx=(0, 5))
-        self.x0_var = tk.StringVar(value="1")
+        self.x0_var = tk.StringVar(value=str(defaults_config['coordinates']['x0']))
         ttk.Entry(coord_inner, textvariable=self.x0_var, width=8).grid(row=0, column=1, padx=(0, 20))
         
         ttk.Label(coord_inner, text="y0:").grid(row=0, column=2, sticky='w', padx=(0, 5))
-        self.y0_var = tk.StringVar(value="1")
+        self.y0_var = tk.StringVar(value=str(defaults_config['coordinates']['y0']))
         ttk.Entry(coord_inner, textvariable=self.y0_var, width=8).grid(row=0, column=3)
         
         # Matrices lado a lado
@@ -352,11 +389,13 @@ class HNAFGUI:
         a1_inner = ttk.Frame(a1_frame)
         a1_inner.pack(padx=10, pady=10)
         
+        # Matriz A1 desde configuración
+        default_A1 = defaults_config['matrices']['A1']
         self.a1_vars = []
         for i in range(2):
             row_vars = []
             for j in range(2):
-                var = tk.StringVar(value=str([[1, 50], [-1, 1]][i][j]))
+                var = tk.StringVar(value=str(default_A1[i][j]))
                 ttk.Entry(a1_inner, textvariable=var, width=8).grid(row=i, column=j, padx=2, pady=2)
                 row_vars.append(var)
             self.a1_vars.append(row_vars)
@@ -368,11 +407,13 @@ class HNAFGUI:
         a2_inner = ttk.Frame(a2_frame)
         a2_inner.pack(padx=10, pady=10)
         
+        # Matriz A2 desde configuración
+        default_A2 = defaults_config['matrices']['A2']
         self.a2_vars = []
         for i in range(2):
             row_vars = []
             for j in range(2):
-                var = tk.StringVar(value=str([[1, -1], [50, 1]][i][j]))
+                var = tk.StringVar(value=str(default_A2[i][j]))
                 ttk.Entry(a2_inner, textvariable=var, width=8).grid(row=i, column=j, padx=2, pady=2)
                 row_vars.append(var)
             self.a2_vars.append(row_vars)
@@ -390,13 +431,13 @@ class HNAFGUI:
         
         ttk.Label(reward_inner, text="Expresión (usar x, y, x0, y0):").pack(anchor='w')
         
-        self.reward_expr_var = tk.StringVar(value="np.linalg.norm([x, y])")
+        self.reward_expr_var = tk.StringVar(value=defaults_config['reward_function'])
         reward_entry = ttk.Entry(reward_inner, textvariable=self.reward_expr_var, width=50)
         reward_entry.pack(fill=tk.X, pady=(5, 0))
         
         # Selector de optimización de recompensa
         ttk.Label(reward_inner, text="Optimización de recompensa:").pack(anchor='w', pady=(10, 0))
-        self.reward_optimization_var = tk.StringVar(value="minimizar")
+        self.reward_optimization_var = tk.StringVar(value=defaults_config['reward_optimization'])
         reward_optimization_frame = ttk.Frame(reward_inner)
         reward_optimization_frame.pack(fill=tk.X, pady=(5, 0))
         
@@ -413,7 +454,7 @@ class HNAFGUI:
         controls_inner.pack(fill=tk.X, padx=10, pady=10)
         
         # Checkbox
-        self.use_custom_functions_var = tk.BooleanVar(value=False)
+        self.use_custom_functions_var = tk.BooleanVar(value=self.checkbox_defaults['use_custom_functions'])
         ttk.Checkbutton(controls_inner, text="Usar Funciones Personalizadas", 
                        variable=self.use_custom_functions_var).pack(anchor='w', pady=(0, 10))
         
@@ -643,32 +684,39 @@ class HNAFGUI:
         self.training_thread.start()
     
     def get_training_parameters(self):
-        """Obtener parámetros de la interfaz"""
-        return {
-            'state_dim': self.state_dim_var.get(),
-            'action_dim': self.action_dim_var.get(),
-            'num_modes': self.num_modes_var.get(),
-            'hidden_dim': self.hidden_dim_var.get(),
-            'num_layers': self.num_layers_var.get(),
-            'lr': self.learning_rate_var.get(),
-            'tau': self.tau_var.get(),
-            'gamma': self.gamma_var.get(),
-            'num_episodes': self.num_episodes_var.get(),
-            'batch_size': self.batch_size_var.get(),
-            'initial_epsilon': self.initial_epsilon_var.get(),
-            'final_epsilon': self.final_epsilon_var.get(),
-            'max_steps': self.max_steps_var.get(),
-            'buffer_capacity': self.buffer_capacity_var.get(),
-            'alpha': self.alpha_var.get(),
-            'beta': self.beta_var.get(),
-            'reward_normalize': self.reward_normalize_var.get(),
-            'reward_shaping': self.reward_shaping_var.get(),
-            'reward_optimization': self.reward_optimization_var.get(),
-            'gui_reward_function': self.reward_expr_var.get()
-        }
-        
-        # **DEBUG**: Imprimir la función de recompensa que se está enviando
-        print(f"DEBUG: Función de recompensa de GUI: '{self.reward_expr_var.get()}'")
+        """Obtener parámetros de la interfaz (con conversión de tipos segura)"""
+        try:
+            params = {
+                'state_dim': self.state_dim_var.get(),
+                'action_dim': self.action_dim_var.get(),
+                'num_modes': self.num_modes_var.get(),
+                'hidden_dim': self.hidden_dim_var.get(),
+                'num_layers': self.num_layers_var.get(),
+                'lr': self.learning_rate_var.get(),
+                'tau': self.tau_var.get(),
+                'gamma': self.gamma_var.get(),
+                'num_episodes': self.num_episodes_var.get(),
+                'batch_size': self.batch_size_var.get(),
+                'initial_epsilon': self.initial_epsilon_var.get(),
+                'final_epsilon': self.final_epsilon_var.get(),
+                'max_steps': int(self.max_steps_var.get()),  # Convertir a int
+                'buffer_capacity': int(self.buffer_capacity_var.get()),  # Convertir a int
+                'alpha': float(self.alpha_var.get()),  # Convertir a float
+                'beta': float(self.beta_var.get()),  # Convertir a float
+                'reward_normalize': self.reward_normalize_var.get(),
+                'reward_shaping': self.reward_shaping_var.get(),
+                'reward_optimization': self.reward_optimization_var.get(),
+                'gui_reward_function': self.reward_expr_var.get()
+            }
+            # **DEBUG**: Imprimir la función de recompensa que se está enviando
+            print(f"DEBUG: Función de recompensa de GUI: '{params['gui_reward_function']}'")
+            return params
+        except ValueError as e:
+            error_msg = f"❌ ERROR EN PARÁMETROS DE GUI:\n" \
+                       f"   Error de conversión: {e}\n" \
+                       f"   Revisa que todos los campos tengan valores válidos"
+            print(error_msg)
+            raise RuntimeError(f"Parámetros de GUI inválidos: {e}")
     
     def run_training(self, params):
         """Ejecutar entrenamiento con parámetros dados"""

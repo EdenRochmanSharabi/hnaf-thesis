@@ -1,0 +1,251 @@
+# ================================================================
+# HNAF - Configuración Centralizada
+# Todos los parámetros configurables sin valores hardcodeados
+# ================================================================
+
+# ================================================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# ================================================================
+app:
+  title: "HNAF Training and Evaluation GUI"
+  window:
+    width: 1400
+    height: 900
+  banner:
+    width: 60
+    char: "="
+  
+# ================================================================
+# PARÁMETROS DE LA RED NEURONAL
+# ================================================================
+network:
+  defaults:
+    state_dim: 2
+    action_dim: 2
+    num_modes: 2
+    hidden_dim: 64
+    num_layers: 3
+  
+  ranges:
+    state_dim: [1, 10]
+    action_dim: [1, 10] 
+    num_modes: [1, 5]
+    hidden_dim: [16, 256]
+    hidden_dim_increment: 16
+    num_layers: [2, 5]
+
+# ================================================================
+# PARÁMETROS DE ENTRENAMIENTO
+# ================================================================
+training:
+  defaults:
+    learning_rate: 0.0001      # 1e-4
+    tau: 0.00001              # 1e-5 - Soft update rate
+    gamma: 0.9                # Discount factor
+    num_episodes: 1000
+    batch_size: 64
+    initial_epsilon: 0.5
+    final_epsilon: 0.05
+    max_steps: 50
+    buffer_capacity: 10000
+    alpha: 0.6                # Priority replay alpha
+    beta: 0.4                 # Priority replay beta
+    
+  ranges:
+    learning_rate: [0.0001, 0.1]
+    learning_rate_increment: 0.0001
+    tau: [0.0001, 0.01]
+    tau_increment: 0.0001
+    gamma: [0.8, 0.999]
+    gamma_increment: 0.001
+    num_episodes: [100, 5000]
+    episodes_increment: 100
+    batch_size: [8, 128]
+    batch_size_increment: 8
+    initial_epsilon: [0.1, 1.0]
+    epsilon_increment: 0.05
+    final_epsilon: [0.01, 0.2]
+    final_epsilon_increment: 0.01
+    max_steps: [10, 200]
+    buffer_capacity: [1000, 50000]
+    buffer_increment: 1000
+    alpha: [0.0, 1.0]
+    priority_increment: 0.1
+    beta: [0.0, 1.0]
+    
+  # Intervalos de evaluación
+  evaluation:
+    interval: 50              # Cada cuántos episodios evaluar
+    num_episodes: 10          # Episodios para evaluación
+    grid_size: 50             # Tamaño del grid de evaluación
+    grid_size_display: 100    # Tamaño mostrado en terminal
+
+# ================================================================
+# LÍMITES Y TOLERANCIAS NUMÉRICAS
+# ================================================================
+numerical:
+  # Límites de clipping de estados (-5.0, 5.0)
+  state_limits:
+    min: -5.0
+    max: 5.0
+    
+  # Tolerancias numéricas (NOTA: YAML interpreta 1e-8 como string)
+  tolerances:
+    division_epsilon: 0.00000001     # Para evitar división por cero (1e-8)
+    priority_epsilon: 0.000001       # Prioridad mínima en replay buffer (1e-6)
+    diagonal_clamp_min: 0.000001     # Clamp mínimo para elementos diagonal (1e-6)
+    matrix_clamp_l: [-3, 3]          # Límites para elementos L matrix
+    matrix_clamp_off_diag: [-1, 1]   # Límites off-diagonal
+    convergence_tolerance: 0.0000000001  # Tolerancia de convergencia (1e-10)
+    comparison_strict: 0.0000000001  # Comparación muy estricta (1e-10)
+    comparison_normal: 0.001         # Comparación normal (1e-3)
+
+# ================================================================
+# REWARD SHAPING
+# ================================================================
+reward_shaping:
+  enabled: false            # Por defecto deshabilitado
+  coefficients:
+    distance_penalty: 0.1   # Penalización por alejamiento
+    approach_bonus: 0.05    # Bonus por acercamiento
+    suboptimal_penalty: 0.1 # Penalización modo subóptimo
+    oscillation_penalty: 0.05 # Penalización oscilación
+    success_bonus: 1.0      # Bonus éxito episodio
+
+# ================================================================
+# INICIALIZACIÓN DE PARÁMETROS 
+# ================================================================
+initialization:
+  # Seeds para reproducibilidad (42 para resultados reproducibles)
+  seeds:
+    numpy_seed: 42            # 42 para reproducibilidad completa
+    torch_seed: 42            # 42 para reproducibilidad completa
+    
+  # Parámetros de inicialización de red
+  network:
+    xavier_gain_general: 1.0
+    xavier_gain_l_head: 0.1
+    bias_constant: 0.0
+    mu_scale: 0.1            # Escala para mu head
+    l_scale: 0.1             # Escala para L head  
+    diagonal_offset: 0.1     # Offset para diagonal L
+
+# ================================================================
+# COORDENADAS Y MATRICES POR DEFECTO
+# ================================================================
+defaults:
+  coordinates:
+    x0: 1
+    y0: 1
+    
+  # Matrices por defecto ([[1,50],[-1,1]])
+  matrices:
+    A1: [[1, 50], [-1, 1]]
+    A2: [[1, -1], [50, 1]]
+    
+  # Función de recompensa por defecto
+  reward_function: "np.linalg.norm([x, y])"
+  
+  # Optimización por defecto
+  reward_optimization: "minimizar"
+
+# ================================================================
+# CONFIGURACIÓN DE INTERFAZ
+# ================================================================
+interface:
+  # Valores por defecto de checkboxes
+  checkboxes:
+    show_rewards: true
+    show_precision: true
+    show_loss: true
+    reward_normalize: false
+    reward_shaping: false
+    use_custom_functions: false
+    use_gemini_optimization: false
+    
+  # Mensajes de estado
+  status_messages:
+    optimization_inactive: "Optimización: Inactiva"
+    optuna_inactive: "Optimización Optuna: Inactiva"
+    no_training: "No iniciado"
+    initializing: "Iniciando..."
+
+# ================================================================
+# PARÁMETROS AVANZADOS
+# ================================================================
+advanced:
+  # Parámetros para NAF corrected
+  time_parameter: 1.0         # Parámetro t (1.0)
+  
+  # Configuración de visualización
+  matplotlib:
+    available_fallback: "⚠️  Matplotlib no disponible. Gráficos deshabilitados."
+    
+  # Parámetros de normalización
+  normalization:
+    reward_normalize: true
+    state_normalize: true
+    
+  # Configuración de optimizadores externos
+  optuna:
+    n_trials: 100
+    timeout: 3600             # 1 hora
+    
+  gemini:
+    max_iterations: 50
+    convergence_threshold: 0.001
+
+# ================================================================
+# CONFIGURACIÓN DE DEPURACIÓN
+# ================================================================
+debug:
+  # Prints de depuración
+  verbose: true
+  print_matrices: true
+  print_function_loading: true
+  print_evaluation_grid: true
+  
+  # Configuración de logs
+  log_level: "INFO"          # DEBUG, INFO, WARNING, ERROR
+  log_evaluation: true
+  log_training_progress: true
+
+# ================================================================
+# PERFILES PREDEFINIDOS
+# ================================================================
+profiles:
+  beginner:
+    description: "Configuración básica para principiantes"
+    network:
+      hidden_dim: 32
+      num_layers: 2
+    training:
+      learning_rate: 0.001
+      num_episodes: 500
+      
+  intermediate:
+    description: "Configuración balanceada"
+    network:
+      hidden_dim: 64
+      num_layers: 3
+    training:
+      learning_rate: 0.0001
+      num_episodes: 1000
+      
+  expert:
+    description: "Configuración avanzada para experimentación"
+    network:
+      hidden_dim: 128
+      num_layers: 4
+    training:
+      learning_rate: 0.00001
+      num_episodes: 2000
+      
+  research:
+    description: "Configuración para investigación intensiva"
+    network:
+      hidden_dim: 256
+      num_layers: 5
+    training:
+      learning_rate: 0.000001
+      num_episodes: 5000

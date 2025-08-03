@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-HNAF Mejorado con optimizaciones avanzadas:
-- ε-greedy decay (0.5 -> 0.05)
-- Prioritized Experience Replay
-- Normalización de estados y recompensas
-- Red más profunda (2-3 capas, 64-128 unidades)
-- Reward shaping local
-- Evaluación con grid de 100x100
-- Horizonte más largo
+HNAF Mejorado SIN VALORES HARDCODEADOS:
+- Todos los parámetros desde config.yaml
+- ε-greedy decay configurable
+- Prioritized Experience Replay configurable
+- Normalización de estados y recompensas configurable
+- Red neuronal totalmente configurable
+- Límites y tolerancias configurables
+- Evaluación con grid configurable
+- Reward shaping totalmente configurable
 """
 
 import numpy as np
@@ -17,9 +18,15 @@ import torch.optim as optim
 import torch.nn.functional as F
 from collections import deque
 import random
+import sys
+import os
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 from .naf_corrected import CorrectedOptimizationFunctions
+
+# Importar config manager - buscar desde el directorio padre
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from final_app.config_manager import get_config_manager
 
 class ImprovedNAFNetwork(nn.Module):
     """
@@ -60,18 +67,22 @@ class ImprovedNAFNetwork(nn.Module):
         self._init_weights()
         
     def _init_weights(self):
-        """Inicialización mejorada de pesos"""
+        """Inicialización mejorada de pesos (valores desde configuración)"""
+        config_manager = get_config_manager()
+        init_config = config_manager.get_initialization_config()
+        network_init = init_config['network']
+        
         for module in self.layers + [self.value_head, self.mu_head]:
             if hasattr(module, 'weight'):
-                nn.init.xavier_uniform_(module.weight, gain=1.0)
+                nn.init.xavier_uniform_(module.weight, gain=network_init['xavier_gain_general'])
                 if hasattr(module, 'bias') and module.bias is not None:
-                    nn.init.constant_(module.bias, 0.0)
+                    nn.init.constant_(module.bias, network_init['bias_constant'])
         
-        # Inicialización especial para l_head para evitar elementos diagonales muy pequeños
+        # Inicialización especial para l_head (configurable)
         if hasattr(self.l_head, 'weight'):
-            nn.init.xavier_uniform_(self.l_head.weight, gain=0.1)
+            nn.init.xavier_uniform_(self.l_head.weight, gain=network_init['xavier_gain_l_head'])
             if hasattr(self.l_head, 'bias') and self.l_head.bias is not None:
-                nn.init.constant_(self.l_head.bias, 0.0)
+                nn.init.constant_(self.l_head.bias, network_init['bias_constant'])
         
     def forward(self, x, training=True):
         """
@@ -89,22 +100,34 @@ class ImprovedNAFNetwork(nn.Module):
                     x = bn(x)
             x = F.relu(x)  # ReLU para redes más profundas
         
-        # Valores de salida
-        V = self.value_head(x)
-        mu = torch.tanh(self.mu_head(x)) * 0.1
+        # Valores de salida (escalas desde configuración)
+        config_manager = get_config_manager()
+        init_config = config_manager.get_initialization_config()
+        network_init = init_config['network']
+        tolerances = config_manager.get_tolerances()
         
-        # Construir matriz L triangular inferior
-        l_params = self.l_head(x) * 0.1
+        V = self.value_head(x)
+        mu = torch.tanh(self.mu_head(x)) * network_init['mu_scale']
+        
+        # Construir matriz L triangular inferior (parámetros configurables)
+        l_params = self.l_head(x) * network_init['l_scale']
         L = torch.zeros(x.size(0), self.action_dim, self.action_dim, device=x.device)
+        
+        matrix_clamp_l = tolerances['matrix_clamp_l']
+        matrix_clamp_off_diag = tolerances['matrix_clamp_off_diag']
+        diagonal_offset = network_init['diagonal_offset']
         
         idx = 0
         for i in range(self.action_dim):
             for j in range(i + 1):
                 if i == j:
-                    # Asegurar que los elementos diagonales no sean muy pequeños
-                    L[:, i, j] = torch.exp(torch.clamp(l_params[:, idx], -3, 3)) + 0.1
+                    # Elementos diagonales (clamp y offset configurables)
+                    L[:, i, j] = torch.exp(torch.clamp(l_params[:, idx], 
+                                                     matrix_clamp_l[0], matrix_clamp_l[1])) + diagonal_offset
                 else:
-                    L[:, i, j] = torch.clamp(l_params[:, idx], -1, 1)
+                    # Elementos off-diagonal (clamp configurable)
+                    L[:, i, j] = torch.clamp(l_params[:, idx], 
+                                           matrix_clamp_off_diag[0], matrix_clamp_off_diag[1])
                 idx += 1
         
         return V, mu, L
@@ -127,9 +150,13 @@ class PrioritizedReplayBuffer:
         self.max_priority = 1.0
         
     def push(self, state, mode, action, reward, next_state, error=None):
-        # Calcular prioridad basada en error o prioridad máxima
+        # Calcular prioridad basada en error (epsilon desde configuración)
+        config_manager = get_config_manager()
+        tolerances = config_manager.get_tolerances()
+        priority_epsilon = tolerances['priority_epsilon']
+        
         if error is not None:
-            priority = (abs(error) + 1e-6) ** self.alpha
+            priority = (abs(error) + priority_epsilon) ** self.alpha
         else:
             priority = self.max_priority
         
@@ -160,14 +187,18 @@ class PrioritizedReplayBuffer:
         return batch, indices, weights
     
     def update_priorities(self, indices, errors):
-        """Actualizar prioridades basadas en errores"""
+        """Actualizar prioridades basadas en errores (epsilon desde configuración)"""
+        config_manager = get_config_manager()
+        tolerances = config_manager.get_tolerances()
+        priority_epsilon = tolerances['priority_epsilon']
+        
         for idx, error in zip(indices, errors):
             if idx < len(self.priorities):
                 # Asegurar que error sea escalar
                 if hasattr(error, '__iter__'):
                     error = error[0] if hasattr(error, '__getitem__') else float(error)
                 
-                priority = (abs(error) + 1e-6) ** self.alpha
+                priority = (abs(error) + priority_epsilon) ** self.alpha
                 # Asegurar que priority sea escalar
                 if hasattr(priority, '__iter__'):
                     priority = priority[0] if hasattr(priority, '__getitem__') else float(priority)
@@ -219,8 +250,13 @@ class ImprovedHNAF:
         # Buffer de experiencia priorizado con parámetros configurables
         self.replay_buffers = [PrioritizedReplayBuffer(capacity=buffer_capacity, alpha=alpha, beta=beta) for _ in range(num_modes)]
         
-        # NAF verifier para recompensas
-        self.naf_verifier = CorrectedOptimizationFunctions(t=1.0)
+        # Cargar configuración (NO hardcodeada)
+        self.config_manager = get_config_manager()
+        advanced_config = self.config_manager.get_advanced_config()
+        
+        # NAF verifier para recompensas (tiempo configurable)
+        time_param = advanced_config['time_parameter']
+        self.naf_verifier = CorrectedOptimizationFunctions(t=time_param)
         
         # Matrices de transformación (se inicializan vacías, se actualizarán desde GUI)
         self.transformation_matrices = [
@@ -238,8 +274,10 @@ class ImprovedHNAF:
         self.reward_function = lambda x, y, x0, y0: self.naf_verifier.execute_function("reward_function", x, y, x0, y0)
     
     def normalize_state(self, state):
-        """Normalizar estado"""
-        return (state - self.state_mean) / (self.state_std + 1e-8)
+        """Normalizar estado (epsilon desde configuración)"""
+        tolerances = self.config_manager.get_tolerances()
+        division_epsilon = tolerances['division_epsilon']
+        return (state - self.state_mean) / (self.state_std + division_epsilon)
     
     def normalize_reward(self, reward):
         """Normalizar recompensa"""
@@ -249,21 +287,26 @@ class ImprovedHNAF:
         
         # Solo normalizar si está habilitado
         if self.reward_normalize:
-            return (reward - self.reward_mean) / (self.reward_std + 1e-8)
+            tolerances = self.config_manager.get_tolerances()
+            division_epsilon = tolerances['division_epsilon']
+            return (reward - self.reward_mean) / (self.reward_std + division_epsilon)
         else:
             return reward
     
     def update_normalization_stats(self, states, rewards):
-        """Actualizar estadísticas de normalización"""
+        """Actualizar estadísticas de normalización (epsilon desde configuración)"""
+        tolerances = self.config_manager.get_tolerances()
+        division_epsilon = tolerances['division_epsilon']
+        
         if len(states) > 0:
             states_array = np.array(states)
             self.state_mean = states_array.mean(axis=0)
-            self.state_std = states_array.std(axis=0) + 1e-8
+            self.state_std = states_array.std(axis=0) + division_epsilon
         
         if len(rewards) > 0:
             rewards_array = np.array(rewards)
             self.reward_mean = rewards_array.mean()
-            self.reward_std = rewards_array.std() + 1e-8
+            self.reward_std = rewards_array.std() + division_epsilon
     
     def update_transformation_matrices(self, A1_matrix, A2_matrix):
         """Actualizar matrices desde el GUI."""
@@ -316,8 +359,10 @@ class ImprovedHNAF:
             # Calcular Q-value con mejor manejo de valores pequeños
             # Usar log1p para evitar problemas con valores muy pequeños
             diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
-            # Asegurar que los elementos diagonales sean positivos y no muy pequeños
-            diagonal_elements = torch.clamp(diagonal_elements, min=1e-6)
+            # Asegurar que los elementos diagonales sean positivos (mínimo desde configuración)
+            tolerances = get_config_manager().get_tolerances()
+            diagonal_clamp_min = tolerances['diagonal_clamp_min']
+            diagonal_elements = torch.clamp(diagonal_elements, min=diagonal_clamp_min)
             log_diagonal = torch.log(diagonal_elements)
             
             Q = V + 0.5 * torch.sum(log_diagonal, dim=1)
@@ -349,7 +394,10 @@ class ImprovedHNAF:
             # Calcular Q-values actuales
             V, mu, P = self.networks[mode].get_P_matrix(states)
             diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
-            diagonal_elements = torch.clamp(diagonal_elements, min=1e-6)
+            # Usar tolerancia configurable
+            tolerances = get_config_manager().get_tolerances()
+            diagonal_clamp_min = tolerances['diagonal_clamp_min']
+            diagonal_elements = torch.clamp(diagonal_elements, min=diagonal_clamp_min)
             log_diagonal = torch.log(diagonal_elements)
             Q_current = V + 0.5 * torch.sum(log_diagonal, dim=1)
             
@@ -357,7 +405,7 @@ class ImprovedHNAF:
             with torch.no_grad():
                 V_next, mu_next, P_next = self.target_networks[mode].get_P_matrix(next_states, training=False)
                 diagonal_elements_next = torch.diagonal(P_next, dim1=1, dim2=2)
-                diagonal_elements_next = torch.clamp(diagonal_elements_next, min=1e-6)
+                diagonal_elements_next = torch.clamp(diagonal_elements_next, min=diagonal_clamp_min)
                 log_diagonal_next = torch.log(diagonal_elements_next)
                 Q_next = V_next + 0.5 * torch.sum(log_diagonal_next, dim=1)
                 Q_target = rewards + self.gamma * Q_next
@@ -423,8 +471,9 @@ class ImprovedHNAF:
                 next_state = A @ state.reshape(-1, 1)
                 next_state = next_state.flatten()
             
-            # **Estabilización del entorno**: Limitar los estados para evitar explosiones
-            next_state = np.clip(next_state, -5.0, 5.0)
+            # **Estabilización del entorno**: Limitar estados (límites desde configuración)
+            state_limits = self.config_manager.get_state_limits()
+            next_state = np.clip(next_state, state_limits['min'], state_limits['max'])
             
             # **MEJORADA**: Calcular recompensa usando la función de la GUI como base
             norm_current = np.linalg.norm(state)
@@ -454,24 +503,27 @@ class ImprovedHNAF:
                 print(error_msg)
                 raise RuntimeError("No hay función de recompensa definida")
             
-            # **CORREGIDO**: Aplicar reward shaping solo si está habilitado
+            # **CORREGIDO**: Aplicar reward shaping solo si está habilitado (coeficientes desde configuración)
             if hasattr(self, 'reward_shaping_enabled') and self.reward_shaping_enabled:
-                # **CORREGIDO**: Penalización por alejarse del origen (más suave)
-                distance_penalty = -abs(norm_next - norm_initial) * 0.1
+                reward_shaping_config = self.config_manager.get_reward_shaping_config()
+                coeffs = reward_shaping_config['coefficients']
                 
-                # **CORREGIDO**: Bonus por acercarse al origen (más suave)
-                approach_bonus = 0.05 if norm_next < norm_current else 0.0
+                # Penalización por alejarse del origen (configurable)
+                distance_penalty = -abs(norm_next - norm_initial) * coeffs['distance_penalty']
                 
-                # **CORREGIDO**: Penalización por modo subóptimo (más suave)
+                # Bonus por acercarse al origen (configurable)
+                approach_bonus = coeffs['approach_bonus'] if norm_next < norm_current else 0.0
+                
+                # Penalización por modo subóptimo (configurable)
                 optimal_mode = self._get_optimal_mode(state)
-                mode_penalty = -0.1 if mode != optimal_mode else 0.0
+                mode_penalty = -coeffs['suboptimal_penalty'] if mode != optimal_mode else 0.0
                 
-                # **CORREGIDO**: Penalización por oscilación (más suave)
-                oscillation_penalty = -0.05 * abs(norm_next - norm_current) if step > 0 else 0.0
+                # Penalización por oscilación (configurable)
+                oscillation_penalty = -coeffs['oscillation_penalty'] * abs(norm_next - norm_current) if step > 0 else 0.0
                 
                 reward_final = reward_base + distance_penalty + approach_bonus + mode_penalty + oscillation_penalty
             else:
-                # **CORREGIDO**: Usar solo la función de la GUI sin reward shaping
+                # Usar solo la función de la GUI sin reward shaping
                 reward_final = reward_base
             
             # **CORREGIDO**: Clamp más razonable
@@ -502,10 +554,12 @@ class ImprovedHNAF:
             if norm_next < 0.01:
                 break
         
-        # **CORREGIDO**: Bonus final por episodio exitoso (más razonable)
+        # Bonus final por episodio exitoso (desde configuración)
         final_norm = np.linalg.norm(state)
         if final_norm < 0.1:
-            total_reward += 1.0  # Bonus más razonable por éxito
+            reward_shaping_config = self.config_manager.get_reward_shaping_config()
+            success_bonus = reward_shaping_config['coefficients']['success_bonus']
+            total_reward += success_bonus
         
         # Actualizar estadísticas de normalización
         if all_states and all_rewards:
@@ -639,8 +693,9 @@ class ImprovedHNAF:
                     next_state = A @ state.reshape(-1, 1)
                     next_state = next_state.flatten()
                 
-                # **NUEVO**: Estabilización del entorno (coherente con entrenamiento)
-                next_state = np.clip(next_state, -5.0, 5.0)
+                # **NUEVO**: Estabilización del entorno (límites desde configuración)
+                state_limits = self.config_manager.get_state_limits()
+                next_state = np.clip(next_state, state_limits['min'], state_limits['max'])
                 
                 # **CORREGIDO**: Usar la función de recompensa de la GUI
                 if hasattr(self, 'reward_function'):

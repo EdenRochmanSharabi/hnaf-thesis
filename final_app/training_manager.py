@@ -2,12 +2,14 @@
 """
 Módulo de entrenamiento para HNAF
 Maneja toda la lógica de entrenamiento
+SIN VALORES HARDCODEADOS - Todo desde config.yaml
 """
 
 import time
 import numpy as np
 import torch
 from src.hnaf_improved import ImprovedHNAF
+from final_app.config_manager import get_config_manager
 
 class TrainingManager:
     """Manager para el entrenamiento del HNAF"""
@@ -15,6 +17,7 @@ class TrainingManager:
     def __init__(self):
         self.hnaf_model = None
         self.training_results = None
+        self.config_manager = get_config_manager()
     
     def _create_gui_reward_function(self, gui_reward_expr, params):
         """Crear función de recompensa desde la expresión del GUI."""
@@ -60,7 +63,9 @@ class TrainingManager:
             print(f"  - Alpha (prioridad): {params['alpha']}, Beta (sesgo): {params['beta']}")
             print(f"  - Normalización de recompensas: {'Habilitada' if params['reward_normalize'] else 'Deshabilitada'}")
             print(f"  - Reward shaping: {'Habilitado' if params.get('reward_shaping', False) else 'Deshabilitado'}")
-            print(f"  - Evaluación en grid 100x100")
+            # Usar tamaño de grid desde configuración
+            eval_config = self.config_manager.get_evaluation_config()
+            print(f"  - Evaluación en grid {eval_config['grid_size_display']}x{eval_config['grid_size_display']}")
             print(f"  - Horizonte más largo: {params['max_steps']} pasos")
             
             # Si hay funciones personalizadas, actualizar el modelo
@@ -120,9 +125,21 @@ class TrainingManager:
                     print(f"   - Función de recompensa: No definida")
             print()
             
-            # Fijar semilla para reproducibilidad
-            np.random.seed(42)
-            torch.manual_seed(42)
+            # Configurar seeds desde configuración (NO hardcodeados)
+            init_config = self.config_manager.get_initialization_config()
+            seeds = init_config['seeds']
+            
+            if seeds['numpy_seed'] is not None:
+                np.random.seed(seeds['numpy_seed'])
+                print(f"🎲 Numpy seed configurado: {seeds['numpy_seed']}")
+            else:
+                print("🎲 Numpy seed aleatorio (sin configurar)")
+                
+            if seeds['torch_seed'] is not None:
+                torch.manual_seed(seeds['torch_seed'])
+                print(f"🎲 PyTorch seed configurado: {seeds['torch_seed']}")
+            else:
+                print("🎲 PyTorch seed aleatorio (sin configurar)")
             
             # Crear modelo HNAF mejorado
             self.hnaf_model = ImprovedHNAF(
@@ -167,7 +184,9 @@ class TrainingManager:
             losses = []
             eval_rewards = []
             grid_accuracies = []
-            eval_interval = 50
+            # Configuración de evaluación (NO hardcodeada)
+            eval_config = self.config_manager.get_evaluation_config()
+            eval_interval = eval_config['interval']
             
             # Entrenamiento mejorado con ε-greedy decay
             epsilon_decay = (float(params['initial_epsilon']) - float(params['final_epsilon'])) / int(params['num_episodes'])
@@ -195,12 +214,12 @@ class TrainingManager:
                 
                 # Evaluación periódica
                 if (episode + 1) % eval_interval == 0:
-                    eval_reward, mode_selections = self.hnaf_model.evaluate_policy(num_episodes=10)
+                    eval_reward, mode_selections = self.hnaf_model.evaluate_policy(num_episodes=eval_config['num_episodes'])
                     eval_rewards.append(eval_reward)
                     
                     # Evaluación en grid para HNAF mejorado
                     if hasattr(self.hnaf_model, 'evaluate_policy_grid'):
-                        grid_results = self.hnaf_model.evaluate_policy_grid(grid_size=50)
+                        grid_results = self.hnaf_model.evaluate_policy_grid(grid_size=eval_config['grid_size'])
                         grid_accuracies.append(grid_results['optimal_accuracy'])
                         
                         print(f"Episodio {episode+1}/{int(params['num_episodes'])}")
@@ -252,7 +271,11 @@ class TrainingManager:
         if total_episodes == 0:
             return 0, "Iniciando..."
         
-        progress = (total_episodes / 1000) * 100  # Asumiendo 1000 episodios
-        status = f"Episodio {total_episodes}/1000"
+        # Calcular progreso sin asumir número fijo de episodios
+        # Usar el número de episodios actual del entrenamiento
+        training_config = self.config_manager.get_training_defaults()
+        max_episodes = training_config['num_episodes']
+        progress = (total_episodes / max_episodes) * 100
+        status = f"Episodio {total_episodes}/{max_episodes}"
         
         return progress, status 
