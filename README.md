@@ -233,11 +233,6 @@ x(t) = expm(A * t) @ x₀
 2. **Hybrid Control Systems**: Branicky et al. (1998)
 3. **Deep Reinforcement Learning**: Sutton & Barto (2018)
 
-## Autor
-
-**Eden Rochman**  
-Estudiante de Ingeniería  
-Tesis de Grado
 
 ## Licencia
 
@@ -249,7 +244,6 @@ Este es un proyecto de tesis académica. Para consultas o sugerencias, por favor
 
 ## Contacto
 
-- **Email**: eden@example.com
 - **GitHub**: [@edenrochman](https://github.com/edenrochman)
 
 ## Conclusiones y Contribuciones
