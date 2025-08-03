@@ -25,18 +25,28 @@ class CorrectedOptimizationFunctions(OptimizationFunctions):
         """
         super().__init__()
         self.t = t
-        self._update_transformations()
+        self._update_transformations(show_print=False)  # Sin print inicial
     
-    def _update_transformations(self):
+    def update_matrices(self, A1, A2):
+        """Override para recalcular exponenciales cuando se actualizan matrices."""
+        # Actualizar matrices base
+        super().update_matrices(A1, A2)
+        
+        # Recalcular exponenciales
+        self._update_transformations(show_print=True)
+    
+    def _update_transformations(self, show_print=True):
         """Actualiza las transformaciones para usar exponencial de matriz."""
         # Calcular exponenciales de matriz
         self.exp_A1_t = expm(self.A1 * self.t)
         self.exp_A2_t = expm(self.A2 * self.t)
         
-        print(f"Exponencial A1*t (t={self.t}):")
-        print(self.exp_A1_t)
-        print(f"Exponencial A2*t (t={self.t}):")
-        print(self.exp_A2_t)
+        # Solo mostrar print cuando se solicite explícitamente
+        if show_print:
+            print(f"Exponencial A1*t (t={self.t}):")
+            print(self.exp_A1_t)
+            print(f"Exponencial A2*t (t={self.t}):")
+            print(self.exp_A2_t)
     
     def _transform_x1(self, x0=None, y0=None):
         """

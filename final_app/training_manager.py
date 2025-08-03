@@ -16,6 +16,28 @@ class TrainingManager:
         self.hnaf_model = None
         self.training_results = None
     
+    def _create_gui_reward_function(self, gui_reward_expr, params):
+        """Crear función de recompensa desde la expresión del GUI."""
+        def gui_reward_function(x, y, x0, y0):
+            try:
+                # Crear namespace seguro para eval
+                safe_dict = {
+                    'x': x, 'y': y, 'x0': x0, 'y0': y0,
+                    'np': np, 'abs': abs, 'sqrt': np.sqrt, 'log': np.log,
+                    '__builtins__': {}
+                }
+                raw_reward = eval(gui_reward_expr, safe_dict)
+                return raw_reward  # Usar la función tal como está definida
+            except Exception as e:
+                error_msg = f"❌ ERROR CRÍTICO: Función de recompensa GUI falló\n" \
+                           f"   Expresión: {gui_reward_expr}\n" \
+                           f"   Error: {e}\n" \
+                           f"   Estado: x={x}, y={y}, x0={x0}, y0={y0}\n" \
+                           f"   ENTRENAMIENTO DETENIDO - Corrige la función de recompensa"
+                print(error_msg)
+                raise RuntimeError(f"Función de recompensa GUI inválida: {e}")
+        return gui_reward_function
+    
     def train_hnaf(self, params):
         """
         Entrenar HNAF con parámetros dados
@@ -69,19 +91,15 @@ class TrainingManager:
                         }
                         raw_reward = eval(custom_funcs['reward_expr'], safe_dict)
                         
-                        # Aplicar optimización según la selección del usuario
-                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                            return -abs(raw_reward)  # Minimizar: hacer negativo
-                        else:
-                            return raw_reward  # Maximizar: mantener positivo
+                        # **CORREGIDO**: Respetar la función tal como la define el usuario
+                        return raw_reward  # Usar la función tal como está definida
                     except Exception as e:
-                        print(f"Error en función de recompensa personalizada: {e}")
-                        # Fallback a función por defecto
-                        fallback_reward = abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
-                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                            return -fallback_reward
-                        else:
-                            return fallback_reward
+                        error_msg = f"❌ ERROR CRÍTICO: Función de recompensa personalizada falló\n" \
+                                   f"   Expresión: {custom_funcs['reward_expr']}\n" \
+                                   f"   Error: {e}\n" \
+                                   f"   ENTRENAMIENTO DETENIDO - Corrige la función de recompensa"
+                        print(error_msg)
+                        raise RuntimeError(f"Función de recompensa personalizada inválida: {e}")
                 
                 # Actualizar el modelo con las funciones personalizadas
                 self.hnaf_model.transformation_functions = transformation_functions
@@ -96,38 +114,10 @@ class TrainingManager:
                 print(f"   - Reward shaping: {'Habilitado' if params.get('reward_shaping', False) else 'Deshabilitado'}")
             else:
                 print("✅ Usando funciones por defecto")
-                # **NUEVO**: Crear función de recompensa desde la GUI
                 if 'gui_reward_function' in params:
-                    gui_reward_expr = params['gui_reward_function']
-                    print(f"   - Función de recompensa: {gui_reward_expr}")
-                    
-                    # Crear función de recompensa desde la GUI
-                    def gui_reward_function(x, y, x0, y0):
-                        try:
-                            # Crear namespace seguro para eval
-                            safe_dict = {
-                                'x': x, 'y': y, 'x0': x0, 'y0': y0,
-                                'np': np, 'abs': abs, 'sqrt': np.sqrt, 'log': np.log,
-                                '__builtins__': {}
-                            }
-                            raw_reward = eval(gui_reward_expr, safe_dict)
-                            
-                            # Aplicar optimización según la selección del usuario
-                            if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                                return -abs(raw_reward)  # Minimizar: hacer negativo
-                            else:
-                                return raw_reward  # Maximizar: mantener positivo
-                        except Exception as e:
-                            print(f"Error en función de recompensa de GUI: {e}")
-                            # Fallback a función por defecto
-                            fallback_reward = abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
-                            if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                                return -fallback_reward
-                            else:
-                                return fallback_reward
-                    
+                    print(f"   - Función de recompensa: {params['gui_reward_function']}")
                 else:
-                    print(f"   - Función de recompensa: np.linalg.norm([x, y])")
+                    print(f"   - Función de recompensa: No definida")
             print()
             
             # Fijar semilla para reproducibilidad
@@ -153,37 +143,24 @@ class TrainingManager:
             # **NUEVO**: Configurar reward shaping
             self.hnaf_model.reward_shaping_enabled = params.get('reward_shaping', True)
             
-            # **NUEVO**: Configurar función de recompensa DESPUÉS de crear el modelo
+            # Configurar función de recompensa desde GUI
             if 'gui_reward_function' in params:
-                gui_reward_expr = params['gui_reward_function']
-                
-                # Crear función de recompensa desde la GUI
-                def gui_reward_function(x, y, x0, y0):
-                    try:
-                        # Crear namespace seguro para eval
-                        safe_dict = {
-                            'x': x, 'y': y, 'x0': x0, 'y0': y0,
-                            'np': np, 'abs': abs, 'sqrt': np.sqrt, 'log': np.log,
-                            '__builtins__': {}
-                        }
-                        raw_reward = eval(gui_reward_expr, safe_dict)
-                        
-                        # Aplicar optimización según la selección del usuario
-                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                            return -abs(raw_reward)  # Minimizar: hacer negativo
-                        else:
-                            return raw_reward  # Maximizar: mantener positivo
-                    except Exception as e:
-                        print(f"Error en función de recompensa de GUI: {e}")
-                        # Fallback a función por defecto
-                        fallback_reward = abs(np.linalg.norm([x, y]) - np.linalg.norm([x0, y0]))
-                        if params.get('reward_optimization', 'minimizar') == 'minimizar':
-                            return -fallback_reward
-                        else:
-                            return fallback_reward
-                
-                # Configurar la función de recompensa en el modelo
+                gui_reward_function = self._create_gui_reward_function(
+                    params['gui_reward_function'], params)
                 self.hnaf_model.reward_function = gui_reward_function
+            
+            # **NUEVO**: SIEMPRE actualizar matrices desde el GUI
+            if 'gui_matrices' in params:
+                gui_matrices = params['gui_matrices']
+                A1_matrix = gui_matrices['A1']
+                A2_matrix = gui_matrices['A2']
+                self.hnaf_model.update_transformation_matrices(A1_matrix, A2_matrix)
+            elif 'custom_functions' in params:
+                # Fallback para compatibilidad
+                custom_funcs = params['custom_functions']
+                A1_matrix = custom_funcs['A1']
+                A2_matrix = custom_funcs['A2']
+                self.hnaf_model.update_transformation_matrices(A1_matrix, A2_matrix)
             
             # Métricas de entrenamiento
             episode_rewards = []
@@ -259,8 +236,12 @@ class TrainingManager:
             return self.hnaf_model, self.training_results
             
         except Exception as e:
-            print(f"Error durante el entrenamiento: {str(e)}")
-            raise e
+            error_msg = f"❌ ERROR CRÍTICO DE ENTRENAMIENTO:\n" \
+                       f"   Error: {e}\n" \
+                       f"   Tipo: {type(e).__name__}\n" \
+                       f"   ENTRENAMIENTO FALLIDO - Revisa configuración"
+            print(error_msg)
+            raise RuntimeError(f"Entrenamiento falló: {e}")
     
     def get_training_progress(self):
         """Obtener progreso del entrenamiento"""

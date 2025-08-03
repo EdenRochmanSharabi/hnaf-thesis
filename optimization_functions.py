@@ -12,18 +12,13 @@ class OptimizationFunctions:
         """Inicializa la clase con un diccionario para almacenar las funciones."""
         self.functions = {}
         self.results = {}
-        self._initialize_default_functions()
-    
-    def _initialize_default_functions(self):
-        """Inicializa las funciones por defecto."""
-        # Coordenadas iniciales
+        
+        # Coordenadas iniciales por defecto
         self.x0, self.y0 = 1, 1
         
-        # Matrices de transformación
-        self.A1 = np.array([[1, 50],
-                           [-1, 1]])
-        self.A2 = np.array([[1, -1],
-                           [50, 1]])
+        # Matrices por defecto (se actualizarán desde el GUI)
+        self.A1 = np.array([[1, 50], [-1, 1]])
+        self.A2 = np.array([[1, -1], [50, 1]])
         
         # Agregar funciones por defecto
         self.add_function("transform_x1", self._transform_x1)
@@ -31,7 +26,7 @@ class OptimizationFunctions:
         self.add_function("reward_function", self._reward_function)
         self.add_function("calculate_transformations", self._calculate_transformations)
     
-    def add_function(self, name: str, func: Callable, description: str = ""):
+    def add_function(self, name: str, func: Callable, description: str = "", silent: bool = False):
         """
         Agrega una nueva función al almacén.
         
@@ -39,12 +34,20 @@ class OptimizationFunctions:
             name: Nombre de la función
             func: Función a almacenar
             description: Descripción de la función
+            silent: Si True, no muestra mensaje de confirmación
         """
         self.functions[name] = {
             'function': func,
             'description': description
         }
-        print(f"Función '{name}' agregada exitosamente.")
+        if not silent:
+            print(f"Función '{name}' agregada exitosamente.")
+    
+    def update_matrices(self, A1, A2):
+        """Actualiza las matrices de transformación."""
+        self.A1 = np.array(A1)
+        self.A2 = np.array(A2)
+        print(f"✅ Matrices base actualizadas: A1={A1}, A2={A2}")
     
     def execute_function(self, name: str, *args, **kwargs) -> Any:
         """

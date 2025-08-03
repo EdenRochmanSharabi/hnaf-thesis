@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Interfaz gráfica modular para HNAF
-Solo maneja la interfaz, no la lógica de entrenamiento
+Interfaz gráfica principal para HNAF
+Maneja la GUI y coordina con los managers de entrenamiento y visualización
 """
 
 import tkinter as tk
@@ -9,8 +9,16 @@ from tkinter import ttk, scrolledtext, messagebox
 import threading
 import sys
 import io
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# Imports de visualización (solo cuando se necesiten)
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    print("⚠️  Matplotlib no disponible. Gráficos deshabilitados.")
+
 import numpy as np
 
 from final_app.visualization_manager import VisualizationManager
@@ -427,13 +435,13 @@ class HNAFGUI:
         self.y0_var.set("1")
         
         # Matriz A1
-        a1_defaults = [[1, 50], [-1, 1]]
+        a1_defaults = [[1, 50], [-1, 1]]  # Valores específicos
         for i in range(2):
             for j in range(2):
                 self.a1_vars[i][j].set(str(a1_defaults[i][j]))
         
         # Matriz A2
-        a2_defaults = [[1, -1], [50, 1]]
+        a2_defaults = [[1, -1], [50, 1]]  # Valores específicos
         for i in range(2):
             for j in range(2):
                 self.a2_vars[i][j].set(str(a2_defaults[i][j]))
@@ -556,10 +564,16 @@ class HNAFGUI:
         plots_frame = ttk.LabelFrame(right_pane, text="Gráficos de Resultados")
         plots_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Restaurar un figsize fijo para evitar que el layout se rompa
-        self.fig = plt.Figure(figsize=(6, 5), dpi=100)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=plots_frame)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        if MATPLOTLIB_AVAILABLE:
+            # Crear gráficos con matplotlib
+            self.fig = plt.Figure(figsize=(6, 5), dpi=100)
+            self.canvas = FigureCanvasTkAgg(self.fig, master=plots_frame)
+            self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        else:
+            # Mostrar mensaje cuando matplotlib no está disponible
+            no_plot_label = ttk.Label(plots_frame, text="Gráficos no disponibles\n(matplotlib requerido)", 
+                                    font=('Arial', 12), foreground='gray')
+            no_plot_label.pack(expand=True)
 
         self.create_plot_controls(plots_frame)
 
@@ -580,16 +594,23 @@ class HNAFGUI:
         params = self.get_training_parameters()
         print("DEBUG: Parámetros obtenidos:", params)
         
-        # Verificar si usar funciones personalizadas
-        if self.use_custom_functions_var.get():
-            try:
+        # **CORREGIDO**: SIEMPRE leer matrices del GUI independientemente de funciones personalizadas
+        try:
+            # Construir matrices A1 y A2 desde los campos de la interfaz
+            A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            
+            # SIEMPRE incluir matrices del GUI
+            params['gui_matrices'] = {
+                'A1': A1,
+                'A2': A2
+            }
+            
+            # Verificar si usar funciones personalizadas
+            if self.use_custom_functions_var.get():
                 # Construir funciones personalizadas desde los campos de la interfaz
                 x0 = float(self.x0_var.get())
                 y0 = float(self.y0_var.get())
-                
-                # Construir matrices A1 y A2
-                A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
-                A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
                 
                 # Función de recompensa
                 reward_expr = self.reward_expr_var.get()
@@ -603,11 +624,13 @@ class HNAFGUI:
                     'reward_expr': reward_expr
                 }
                 print("Usando configuración personalizada")
+            else:
+                print("Usando matrices del GUI con funciones por defecto")
                 
-            except Exception as e:
-                print(f"Error al procesar funciones personalizadas: {e}")
-                messagebox.showerror("Error", f"Error en funciones personalizadas: {e}")
-                return
+        except Exception as e:
+            print(f"Error al procesar matrices del GUI: {e}")
+            messagebox.showerror("Error", f"Error en matrices del GUI: {e}")
+            return
         
         # Actualizar interfaz
         self.train_button.config(state=tk.DISABLED)
@@ -728,6 +751,9 @@ class HNAFGUI:
     
     def update_gui_plot(self):
         """Actualiza solo el gráfico incrustado en la GUI principal."""
+        if not MATPLOTLIB_AVAILABLE:
+            return
+            
         # Verificar si hay algo que mostrar
         show_any = self.show_rewards_var.get() or self.show_precision_var.get() or self.show_loss_var.get()
         
@@ -745,7 +771,10 @@ class HNAFGUI:
 
     def show_plots_in_popup(self):
         """Muestra los gráficos en una ventana emergente de alta resolución."""
-        if not self.training_results:
+        if not self.training_results or not MATPLOTLIB_AVAILABLE:
+            if not MATPLOTLIB_AVAILABLE:
+                messagebox.showwarning("Gráficos no disponibles", 
+                                     "Matplotlib no está instalado. No se pueden mostrar gráficos.")
             return
 
         popup = tk.Toplevel(self.root)

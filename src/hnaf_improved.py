@@ -222,10 +222,10 @@ class ImprovedHNAF:
         # NAF verifier para recompensas
         self.naf_verifier = CorrectedOptimizationFunctions(t=1.0)
         
-        # Matrices de transformación
+        # Matrices de transformación (se inicializan vacías, se actualizarán desde GUI)
         self.transformation_matrices = [
-            np.array([[1, 50], [-1, 1]]),
-            np.array([[1, -1], [50, 1]])
+            np.array([[0, 0], [0, 0]]),  # Se actualizarán desde GUI
+            np.array([[0, 0], [0, 0]])   # Se actualizarán desde GUI
         ]
         
         # Funciones de transformación por defecto
@@ -264,6 +264,14 @@ class ImprovedHNAF:
             rewards_array = np.array(rewards)
             self.reward_mean = rewards_array.mean()
             self.reward_std = rewards_array.std() + 1e-8
+    
+    def update_transformation_matrices(self, A1_matrix, A2_matrix):
+        """Actualizar matrices desde el GUI."""
+        # Actualizar matrices internas
+        self.transformation_matrices = [np.array(A1_matrix), np.array(A2_matrix)]
+        
+        # Actualizar naf_verifier (esto recalcula automáticamente los exponenciales)
+        self.naf_verifier.update_matrices(A1_matrix, A2_matrix)
     
     def select_action(self, state, epsilon=0.0):
         """Seleccionar acción con ε-greedy"""
@@ -404,11 +412,12 @@ class ImprovedHNAF:
                         y_next = y_next[0] if hasattr(y_next, '__iter__') else float(y_next)
                     next_state = np.array([x_next, y_next])
                 except Exception as e:
-                    print(f"Error en transformación del modo {mode}: {e}")
-                    # Fallback a matrices
-                    A = self.transformation_matrices[mode]
-                    next_state = A @ state.reshape(-1, 1)
-                    next_state = next_state.flatten()
+                    error_msg = f"❌ ERROR CRÍTICO: Transformación del modo {mode} falló en entrenamiento\n" \
+                               f"   Error: {e}\n" \
+                               f"   Estado: {state}\n" \
+                               f"   EPISODIO ABORTADO - Revisa funciones de transformación"
+                    print(error_msg)
+                    raise RuntimeError(f"Transformación del modo {mode} inválida en entrenamiento: {e}")
             else:
                 A = self.transformation_matrices[mode]
                 next_state = A @ state.reshape(-1, 1)
@@ -431,12 +440,19 @@ class ImprovedHNAF:
                     if hasattr(reward_base, '__iter__'):
                         reward_base = reward_base[0] if hasattr(reward_base, '__getitem__') else float(reward_base)
                 except Exception as e:
-                    print(f"Error en función de recompensa de GUI: {e}")
-                    # Fallback a función por defecto
-                    reward_base = -norm_next
+                    error_msg = f"❌ ERROR CRÍTICO: Función de recompensa falló\n" \
+                               f"   Error: {e}\n" \
+                               f"   Estado actual: {state}\n" \
+                               f"   Estado siguiente: {next_state}\n" \
+                               f"   EPISODIO ABORTADO - Revisa función de recompensa"
+                    print(error_msg)
+                    raise RuntimeError(f"Función de recompensa inválida: {e}")
             else:
-                # Fallback si no hay función de GUI
-                reward_base = -norm_next
+                error_msg = f"❌ ERROR CRÍTICO: No hay función de recompensa definida\n" \
+                           f"   El modelo no tiene atributo 'reward_function'\n" \
+                           f"   EPISODIO ABORTADO - Configura función de recompensa"
+                print(error_msg)
+                raise RuntimeError("No hay función de recompensa definida")
             
             # **CORREGIDO**: Aplicar reward shaping solo si está habilitado
             if hasattr(self, 'reward_shaping_enabled') and self.reward_shaping_enabled:
@@ -514,11 +530,12 @@ class ImprovedHNAF:
                         y_next = y_next[0] if hasattr(y_next, '__iter__') else float(y_next)
                     next_state = np.array([x_next, y_next])
                 except Exception as e:
-                    print(f"Error en transformación del modo {mode}: {e}")
-                    # Fallback a matrices
-                    A = self.transformation_matrices[mode]
-                    next_state = A @ state.reshape(-1, 1)
-                    next_state = next_state.flatten()
+                    error_msg = f"❌ ERROR CRÍTICO: Transformación del modo {mode} falló en evaluación\n" \
+                               f"   Error: {e}\n" \
+                               f"   Estado: {state}\n" \
+                               f"   EVALUACIÓN ABORTADA - Revisa funciones de transformación"
+                    print(error_msg)
+                    raise RuntimeError(f"Transformación del modo {mode} inválida en evaluación: {e}")
             else:
                 A = self.transformation_matrices[mode]
                 next_state = A @ state.reshape(-1, 1)
@@ -611,17 +628,21 @@ class ImprovedHNAF:
                             y_next = y_next[0] if hasattr(y_next, '__getitem__') else float(y_next)
                         next_state = np.array([x_next, y_next])
                     except Exception as e:
-                        print(f"Error en transformación del modo {mode}: {e}")
-                        # Fallback a matrices
-                        A = self.transformation_matrices[mode]
-                        next_state = A @ state.reshape(-1, 1)
-                        next_state = next_state.flatten()
+                        error_msg = f"❌ ERROR CRÍTICO: Transformación del modo {mode} falló en política óptima\n" \
+                                   f"   Error: {e}\n" \
+                                   f"   Estado: {state}\n" \
+                                   f"   CÁLCULO ABORTADO - Revisa funciones de transformación"
+                        print(error_msg)
+                        raise RuntimeError(f"Transformación del modo {mode} inválida en política óptima: {e}")
                 else:
                     A = self.transformation_matrices[mode]
                     next_state = A @ state.reshape(-1, 1)
                     next_state = next_state.flatten()
                 
-                # Recompensa
+                # **NUEVO**: Estabilización del entorno (coherente con entrenamiento)
+                next_state = np.clip(next_state, -5.0, 5.0)
+                
+                # **CORREGIDO**: Usar la función de recompensa de la GUI
                 if hasattr(self, 'reward_function'):
                     try:
                         reward = self.reward_function(next_state[0], next_state[1], state[0], state[1])
@@ -637,12 +658,9 @@ class ImprovedHNAF:
                         print(f"Error en NAF verifier: {e}")
                         reward = 0.0
                 
-                # Asegurar que reward sea escalar antes de usar abs()
+                # **CORREGIDO**: Asegurar que reward sea escalar y respetar el valor
                 if hasattr(reward, '__iter__'):
                     reward = reward[0] if hasattr(reward, '__getitem__') else float(reward)
-                
-                reward = -abs(reward) / 15.0
-                reward = np.clip(reward, -1, 0)
                 
                 episode_reward += reward
                 state = next_state.copy()
