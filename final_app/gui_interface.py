@@ -21,8 +21,10 @@ except ImportError:
 
 import numpy as np
 
-from final_app.visualization_manager import VisualizationManager
+
 from final_app.training_manager import TrainingManager
+from final_app.config_manager import get_config_manager
+from final_app.logging_manager import get_logger, log_exception, log_info, log_warning
 
 class RedirectText:
     """Clase para redirigir la salida de print a un widget de texto"""
@@ -40,32 +42,43 @@ class RedirectText:
         pass
 
 class HNAFGUI:
-    def __init__(self, root, config_manager):
+    def __init__(self, root, config_manager, cli_mode=False):
         """Inicializa la GUI SIN valores hardcodeados."""
         self.root = root
         self.config_manager = config_manager
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.cli_mode = cli_mode
+        if not cli_mode:
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.training_results = None
         self.training_thread = None
-        self.viz_manager = VisualizationManager()
-        self.hnaf_model = None
 
-        # Inicializar variables de checkboxes desde configuración
+        self.hnaf_model = None
+        self.logger = get_logger("HNAFGUI")
+
+        # Cargar configuraciones específicas (necesario para ambos modos)
         self.interface_config = self.config_manager.get_interface_config()
         self.checkbox_defaults = self.interface_config['checkboxes']
+        self.defaults_config = self.config_manager.get_defaults_config()
         
+        # Inicializar variables de checkboxes desde configuración
         self.show_rewards_var = tk.BooleanVar(value=self.checkbox_defaults['show_rewards'])
         self.show_precision_var = tk.BooleanVar(value=self.checkbox_defaults['show_precision'])
         self.show_loss_var = tk.BooleanVar(value=self.checkbox_defaults['show_loss'])
 
-        self.setup_styles()
-        self.create_widgets()
-        
-        # Configurar redirección de salida
-        print("DEBUG: Configurando redirección de salida")
-        self.redirect_output()
-        print("DEBUG: HNAFGUI inicializada completamente")
+        # Solo crear GUI si no estamos en modo CLI
+        if not self.cli_mode:
+            self.setup_styles()
+            self.create_widgets()
+            
+            # Configurar redirección de salida
+            print("DEBUG: Configurando redirección de salida")
+            self.redirect_output()
+            print("DEBUG: HNAFGUI inicializada completamente")
+        else:
+            # En modo CLI, solo inicializar variables necesarias
+            self._init_cli_variables()
+            print("DEBUG: HNAFGUI inicializada en modo CLI")
     
     def setup_styles(self):
         """Configurar estilos profesionales"""
@@ -254,28 +267,44 @@ class HNAFGUI:
                                   textvariable=self.beta_var, width=10)
         beta_spinbox.grid(row=10, column=1, sticky='ew', padx=5, pady=2)
 
+        # Supervised Episodes
+        supervised_label = ttk.Label(training_frame, text="🧠 Supervised Episodes:")
+        supervised_label.grid(row=11, column=0, sticky='w', padx=(10, 5), pady=2)
+        
+        self.supervised_episodes_var = tk.IntVar(value=training_defaults['supervised_episodes'])
+        supervised_spinbox = ttk.Spinbox(training_frame, from_=training_ranges['supervised_episodes'][0], 
+                                        to=training_ranges['supervised_episodes'][1], 
+                                        increment=training_ranges['supervised_increment'], 
+                                        textvariable=self.supervised_episodes_var, width=10)
+        supervised_spinbox.grid(row=11, column=1, sticky='ew', padx=5, pady=2)
+        
+        # Etiqueta explicativa para entrenamiento supervisado
+        supervised_info = ttk.Label(training_frame, text="(Entrenamiento balanceado: enseña ambos modos)", 
+                                   font=('Arial', 8), foreground='gray')
+        supervised_info.grid(row=11, column=2, sticky='w', padx=5, pady=2)
+
         # Reward Variance Control (desde configuración)
         reward_variance_label = ttk.Label(training_frame, text="Reward Normalize:")
-        reward_variance_label.grid(row=11, column=0, sticky='w', padx=(10, 5), pady=2)
+        reward_variance_label.grid(row=12, column=0, sticky='w', padx=(10, 5), pady=2)
         
         self.reward_normalize_var = tk.BooleanVar(value=self.checkbox_defaults['reward_normalize'])
         reward_normalize_check = ttk.Checkbutton(training_frame, variable=self.reward_normalize_var)
-        reward_normalize_check.grid(row=11, column=1, sticky='w', padx=5, pady=2)
+        reward_normalize_check.grid(row=12, column=1, sticky='w', padx=5, pady=2)
         
         # Reward Shaping Control (desde configuración)
         reward_shaping_label = ttk.Label(training_frame, text="Reward Shaping:")
-        reward_shaping_label.grid(row=12, column=0, sticky='w', padx=(10, 5), pady=2)
+        reward_shaping_label.grid(row=13, column=0, sticky='w', padx=(10, 5), pady=2)
         
         self.reward_shaping_var = tk.BooleanVar(value=self.checkbox_defaults['reward_shaping'])
         reward_shaping_check = ttk.Checkbutton(training_frame, variable=self.reward_shaping_var)
-        reward_shaping_check.grid(row=12, column=1, sticky='w', padx=5, pady=2)
+        reward_shaping_check.grid(row=13, column=1, sticky='w', padx=5, pady=2)
         
         # Separador
-        ttk.Separator(training_frame, orient='horizontal').grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Separator(training_frame, orient='horizontal').grid(row=14, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Sección de optimización automática con Gemini
         optimization_frame = ttk.LabelFrame(training_frame, text="Optimización Automática con Gemini")
-        optimization_frame.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
+        optimization_frame.grid(row=15, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Checkbox para activar optimización automática
         self.use_gemini_optimization_var = tk.BooleanVar(value=self.checkbox_defaults['use_gemini_optimization'])
@@ -333,7 +362,12 @@ class HNAFGUI:
         
         self.load_optuna_params_button = ttk.Button(optuna_buttons_frame, text="Cargar Mejores Parámetros Optuna", 
                                                    command=self.load_optuna_params)
-        self.load_optuna_params_button.pack(side=tk.LEFT)
+        self.load_optuna_params_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Nuevo botón para aplicar parámetros a config.yaml
+        self.apply_optuna_to_config_button = ttk.Button(optuna_buttons_frame, text="Aplicar a Config.yaml", 
+                                                       command=self.apply_optuna_to_config)
+        self.apply_optuna_to_config_button.pack(side=tk.LEFT)
         
         # Estado de optimización Optuna (desde configuración)
         self.optuna_status_var = tk.StringVar(value=status_messages['optuna_inactive'])
@@ -431,13 +465,26 @@ class HNAFGUI:
         
         ttk.Label(reward_inner, text="Expresión (usar x, y, x0, y0):").pack(anchor='w')
         
-        self.reward_expr_var = tk.StringVar(value=defaults_config['reward_function'])
+        self.reward_expr_var = tk.StringVar(value=defaults_config['matrices']['reward_function'])
         reward_entry = ttk.Entry(reward_inner, textvariable=self.reward_expr_var, width=50)
         reward_entry.pack(fill=tk.X, pady=(5, 0))
         
+        # Checkbox para función inteligente de recompensa (ACTIVADO por defecto para mejor resultado)
+        self.smart_reward_var = tk.BooleanVar(value=True)
+        smart_reward_cb = ttk.Checkbutton(reward_inner, 
+                                        text="🧠 Usar Recompensa Inteligente (Mode-Aware)", 
+                                        variable=self.smart_reward_var,
+                                        command=self.toggle_smart_reward)
+        smart_reward_cb.pack(anchor='w', pady=(5, 0))
+        
+        # Etiqueta explicativa para recompensa inteligente
+        smart_reward_info = ttk.Label(reward_inner, text="Enseña automáticamente cuándo usar cada modo", 
+                                     font=('Arial', 8), foreground='gray')
+        smart_reward_info.pack(anchor='w', padx=(20, 0))
+        
         # Selector de optimización de recompensa
         ttk.Label(reward_inner, text="Optimización de recompensa:").pack(anchor='w', pady=(10, 0))
-        self.reward_optimization_var = tk.StringVar(value=defaults_config['reward_optimization'])
+        self.reward_optimization_var = tk.StringVar(value=defaults_config['matrices']['reward_optimization'])
         reward_optimization_frame = ttk.Frame(reward_inner)
         reward_optimization_frame.pack(fill=tk.X, pady=(5, 0))
         
@@ -464,34 +511,173 @@ class HNAFGUI:
         
         ttk.Button(button_frame, text="Valores Por Defecto", 
                   command=self.load_default_values).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Recargar Config", 
+                  command=self.reload_config).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Auto-recargar", 
+                  command=self.toggle_auto_reload).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Mostrar Config", 
+                  command=self.show_current_config).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Probar", 
                   command=self.test_custom_functions).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Guardar", 
                   command=self.save_custom_functions).pack(side=tk.LEFT)
 
     def load_default_values(self):
-        """Cargar valores por defecto"""
-        # Coordenadas
-        self.x0_var.set("1")
-        self.y0_var.set("1")
+        """Cargar valores por defecto desde config.yaml"""
+        # Coordenadas (desde config.yaml)
+        defaults_config = self.config_manager.get_defaults_config()
+        self.x0_var.set(str(defaults_config['coordinates']['x0']))
+        self.y0_var.set(str(defaults_config['coordinates']['y0']))
         
-        # Matriz A1
-        a1_defaults = [[1, 50], [-1, 1]]  # Valores específicos
+        # Matriz A1 (desde config.yaml)
+        a1_defaults = defaults_config['matrices']['A1']
         for i in range(2):
             for j in range(2):
                 self.a1_vars[i][j].set(str(a1_defaults[i][j]))
         
-        # Matriz A2
-        a2_defaults = [[1, -1], [50, 1]]  # Valores específicos
+        # Matriz A2 (desde config.yaml)
+        a2_defaults = defaults_config['matrices']['A2']
         for i in range(2):
             for j in range(2):
                 self.a2_vars[i][j].set(str(a2_defaults[i][j]))
         
-        # Función de recompensa
-        self.reward_expr_var.set("np.linalg.norm([x, y])")
-        self.reward_optimization_var.set("minimizar")
+        # **NUEVO**: Función de recompensa desde config.yaml
+        self.reward_expr_var.set(defaults_config['matrices']['reward_function'])
+        self.reward_optimization_var.set(defaults_config['matrices']['reward_optimization'])
         
-        print("✅ Valores por defecto cargados")
+        print("✅ Valores por defecto cargados desde config.yaml")
+
+    def reload_config(self):
+        """Recargar configuración desde config.yaml"""
+        try:
+            print("🔄 Recargando configuración desde config.yaml...")
+            
+            # Recargar el config manager
+            self.config_manager.load_config()
+            
+            # Recargar valores por defecto
+            self.load_default_values()
+            
+            # Recargar configuración de interfaz
+            self.interface_config = self.config_manager.get_interface_config()
+            self.checkbox_defaults = self.interface_config['checkboxes']
+            
+            # Actualizar checkboxes
+            self.show_rewards_var.set(self.checkbox_defaults['show_rewards'])
+            self.show_precision_var.set(self.checkbox_defaults['show_precision'])
+            self.show_loss_var.set(self.checkbox_defaults['show_loss'])
+            self.reward_normalize_var.set(self.checkbox_defaults['reward_normalize'])
+            self.reward_shaping_var.set(self.checkbox_defaults['reward_shaping'])
+            self.smart_reward_var.set(self.checkbox_defaults['smart_reward'])
+            self.use_custom_functions_var.set(self.checkbox_defaults['use_custom_functions'])
+            
+            print("✅ Configuración recargada exitosamente")
+            
+        except Exception as e:
+            error_msg = f"❌ ERROR CRÍTICO: Error recargando configuración\n" \
+                       f"   Error: {e}\n" \
+                       f"   Revisa el archivo config.yaml"
+            print(error_msg)
+            if not self.cli_mode:
+                messagebox.showerror("Error", f"Error recargando configuración:\n{e}")
+
+    def toggle_auto_reload(self):
+        """Alternar auto-recarga de configuración"""
+        if not hasattr(self, 'auto_reload_enabled'):
+            self.auto_reload_enabled = False
+        
+        self.auto_reload_enabled = not self.auto_reload_enabled
+        
+        if self.auto_reload_enabled:
+            print("🔄 Auto-recarga habilitada - Monitoreando config.yaml")
+            self.start_config_monitor()
+        else:
+            print("⏹️ Auto-recarga deshabilitada")
+            self.stop_config_monitor()
+
+    def start_config_monitor(self):
+        """Iniciar monitoreo del archivo config.yaml"""
+        import os
+        import time
+        import threading
+        
+        def monitor_config():
+            config_path = self.config_manager.config_path
+            last_modified = os.path.getmtime(config_path)
+            
+            while self.auto_reload_enabled:
+                try:
+                    current_modified = os.path.getmtime(config_path)
+                    if current_modified > last_modified:
+                        print("📝 Cambio detectado en config.yaml - Recargando...")
+                        self.root.after(0, self.reload_config)
+                        last_modified = current_modified
+                    
+                    time.sleep(1)  # Verificar cada segundo
+                except Exception as e:
+                    print(f"❌ Error en monitoreo: {e}")
+                    break
+        
+        self.monitor_thread = threading.Thread(target=monitor_config, daemon=True)
+        self.monitor_thread.start()
+
+    def stop_config_monitor(self):
+        """Detener monitoreo del archivo config.yaml"""
+        if hasattr(self, 'auto_reload_enabled'):
+            self.auto_reload_enabled = False
+
+    def show_current_config(self):
+        """Mostrar configuración actual en una ventana emergente"""
+        try:
+            import tkinter as tk
+            from tkinter import scrolledtext
+            
+            # Crear ventana emergente
+            config_window = tk.Toplevel(self.root)
+            config_window.title("Configuración Actual")
+            config_window.geometry("600x400")
+            
+            # Área de texto con scroll
+            text_area = scrolledtext.ScrolledText(config_window, wrap=tk.WORD, width=70, height=20)
+            text_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Obtener configuración actual
+            defaults_config = self.config_manager.get_defaults_config()
+            
+            # Mostrar información de configuración
+            config_info = f"""CONFIGURACIÓN ACTUAL (config.yaml)
+
+📍 COORDENADAS INICIALES:
+   x0: {defaults_config['coordinates']['x0']}
+   y0: {defaults_config['coordinates']['y0']}
+
+🔄 MATRICES DE TRANSFORMACIÓN:
+   A1 (Modo 0): {defaults_config['matrices']['A1']}
+   A2 (Modo 1): {defaults_config['matrices']['A2']}
+
+💰 FUNCIÓN DE RECOMPENSA:
+   Expresión: {defaults_config['matrices']['reward_function']}
+   Optimización: {defaults_config['matrices']['reward_optimization']}
+
+📁 ARCHIVO DE CONFIGURACIÓN:
+   {self.config_manager.config_path}
+
+🔄 ESTADO DE AUTO-RECARGA:
+   {'Habilitada' if hasattr(self, 'auto_reload_enabled') and self.auto_reload_enabled else 'Deshabilitada'}
+
+💡 CONSEJO: Modifica el archivo config.yaml y usa "Recargar Config" 
+   o habilita "Auto-recargar" para ver los cambios automáticamente.
+"""
+            
+            text_area.insert(tk.END, config_info)
+            text_area.config(state=tk.DISABLED)  # Solo lectura
+            
+        except Exception as e:
+            error_msg = f"❌ ERROR CRÍTICO: Error mostrando configuración\n" \
+                       f"   Error: {e}"
+            print(error_msg)
+            if not self.cli_mode:
+                messagebox.showerror("Error", f"Error mostrando configuración:\n{e}")
 
     def test_custom_functions(self):
         """Probar las funciones personalizadas"""
@@ -535,8 +721,41 @@ class HNAFGUI:
             print(f"❌ Error en las funciones personalizadas: {e}")
 
     def save_custom_functions(self):
-        """Guardar funciones personalizadas (placeholder)"""
-        print("💾 Configuración guardada (funcionalidad pendiente)")
+        """Guardar funciones personalizadas en config.yaml"""
+        try:
+            print("💾 Guardando funciones personalizadas en config.yaml...")
+            
+            # Obtener configuración actual
+            config_data = self.config_manager.config.copy()
+            
+            # Actualizar coordenadas
+            config_data['defaults']['coordinates']['x0'] = float(self.x0_var.get())
+            config_data['defaults']['coordinates']['y0'] = float(self.y0_var.get())
+            
+            # Actualizar matrices
+            A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            config_data['defaults']['matrices']['A1'] = A1
+            config_data['defaults']['matrices']['A2'] = A2
+            
+            # Actualizar función de recompensa
+            config_data['defaults']['matrices']['reward_function'] = self.reward_expr_var.get()
+            config_data['defaults']['matrices']['reward_optimization'] = self.reward_optimization_var.get()
+            
+            # Guardar en config.yaml
+            self.config_manager.save_config(config_data, backup=True)
+            
+            print("✅ Funciones personalizadas guardadas en config.yaml")
+            if not self.cli_mode:
+                messagebox.showinfo("Guardado", "Funciones personalizadas guardadas en config.yaml")
+                
+        except Exception as e:
+            error_msg = f"❌ ERROR CRÍTICO: Error guardando funciones personalizadas\n" \
+                       f"   Error: {e}\n" \
+                       f"   Revisa los valores ingresados"
+            print(error_msg)
+            if not self.cli_mode:
+                messagebox.showerror("Error", f"Error guardando funciones:\n{e}")
 
     def create_control_buttons(self, parent):
         """Crear botones de control"""
@@ -628,7 +847,8 @@ class HNAFGUI:
         print("DEBUG: Botón 'Iniciar Entrenamiento' presionado")
         if hasattr(self, 'training_thread') and self.training_thread and self.training_thread.is_alive():
             print("DEBUG: Entrenamiento ya en progreso")
-            messagebox.showwarning("Advertencia", "El entrenamiento ya está en progreso")
+            if not self.cli_mode:
+                messagebox.showwarning("Advertencia", "El entrenamiento ya está en progreso")
             return
         
         # Obtener parámetros
@@ -637,15 +857,7 @@ class HNAFGUI:
         
         # **CORREGIDO**: SIEMPRE leer matrices del GUI independientemente de funciones personalizadas
         try:
-            # Construir matrices A1 y A2 desde los campos de la interfaz
-            A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
-            A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
-            
-            # SIEMPRE incluir matrices del GUI
-            params['gui_matrices'] = {
-                'A1': A1,
-                'A2': A2
-            }
+            # Matrices ya incluidas en get_training_parameters
             
             # Verificar si usar funciones personalizadas
             if self.use_custom_functions_var.get():
@@ -670,13 +882,15 @@ class HNAFGUI:
                 
         except Exception as e:
             print(f"Error al procesar matrices del GUI: {e}")
-            messagebox.showerror("Error", f"Error en matrices del GUI: {e}")
+            if not self.cli_mode:
+                messagebox.showerror("Error", f"Error en matrices del GUI: {e}")
             return
         
-        # Actualizar interfaz
-        self.train_button.config(state=tk.DISABLED)
-        self.status_label.config(text="Entrenando...")
-        self.progress_var.set(0)
+        # Actualizar interfaz (solo en modo GUI)
+        if not self.cli_mode:
+            self.train_button.config(state=tk.DISABLED)
+            self.status_label.config(text="Entrenando...")
+            self.progress_var.set(0)
         
         # Iniciar entrenamiento en hilo separado
         self.training_thread = threading.Thread(target=self.run_training, args=(params,))
@@ -686,6 +900,10 @@ class HNAFGUI:
     def get_training_parameters(self):
         """Obtener parámetros de la interfaz (con conversión de tipos segura)"""
         try:
+            # Construir matrices A1 y A2 desde los campos de la interfaz
+            A1 = [[float(self.a1_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            A2 = [[float(self.a2_vars[i][j].get()) for j in range(2)] for i in range(2)]
+            
             params = {
                 'state_dim': self.state_dim_var.get(),
                 'action_dim': self.action_dim_var.get(),
@@ -703,10 +921,15 @@ class HNAFGUI:
                 'buffer_capacity': int(self.buffer_capacity_var.get()),  # Convertir a int
                 'alpha': float(self.alpha_var.get()),  # Convertir a float
                 'beta': float(self.beta_var.get()),  # Convertir a float
+                'supervised_episodes': self.supervised_episodes_var.get(),  # Ya es IntVar
                 'reward_normalize': self.reward_normalize_var.get(),
                 'reward_shaping': self.reward_shaping_var.get(),
                 'reward_optimization': self.reward_optimization_var.get(),
-                'gui_reward_function': self.reward_expr_var.get()
+                'gui_reward_function': 'mode_aware_reward' if self.smart_reward_var.get() else self.reward_expr_var.get(),
+                'gui_matrices': {
+                    'A1': A1,
+                    'A2': A2
+                }
             }
             # **DEBUG**: Imprimir la función de recompensa que se está enviando
             print(f"DEBUG: Función de recompensa de GUI: '{params['gui_reward_function']}'")
@@ -730,33 +953,38 @@ class HNAFGUI:
             # Ejecutar entrenamiento
             self.hnaf_model, self.training_results = training_manager.train_hnaf(params)
             
-            # Actualizar interfaz
-            self.root.after(0, self.training_completed)
+            # Actualizar interfaz (solo en modo GUI)
+            if not self.cli_mode:
+                self.root.after(0, self.training_completed)
             
         except Exception as e:
             print(f"Error durante el entrenamiento: {str(e)}")
-            self.root.after(0, self.training_error, str(e))
+            if not self.cli_mode:
+                self.root.after(0, self.training_error, str(e))
     
     def training_completed(self):
         """Llamado cuando el entrenamiento se completa"""
-        self.train_button.config(state=tk.NORMAL)
-        self.eval_button.config(state=tk.NORMAL)
-        self.verify_button.config(state=tk.NORMAL)
-        self.status_label.config(text="Entrenamiento completado")
-        self.progress_var.set(100)
-        
-        # Lógica de actualización de gráficos refactorizada
-        self.update_gui_plot()
-        self.show_plots_in_popup()
+        if not self.cli_mode:
+            self.train_button.config(state=tk.NORMAL)
+            self.eval_button.config(state=tk.NORMAL)
+            self.verify_button.config(state=tk.NORMAL)
+            self.status_label.config(text="Entrenamiento completado")
+            self.progress_var.set(100)
+            
+            # Lógica de actualización de gráficos refactorizada
+            self.update_gui_plot()
+            self.show_plots_in_popup()
 
-        self.train_button['state'] = 'normal'
-        self.verify_button['state'] = 'normal'
+            self.train_button['state'] = 'normal'
+            self.verify_button['state'] = 'normal'
 
     def training_error(self, error_msg):
         """Llamado cuando hay un error en el entrenamiento"""
-        self.train_button.config(state=tk.NORMAL)
-        self.status_label.config(text="Error en entrenamiento")
-        messagebox.showerror("Error", f"Error durante el entrenamiento:\n{error_msg}")
+        if not self.cli_mode:
+            self.train_button.config(state=tk.NORMAL)
+            self.status_label.config(text="Error en entrenamiento")
+        if not self.cli_mode:
+            messagebox.showerror("Error", f"Error durante el entrenamiento:\n{error_msg}")
     
     def evaluate_model(self):
         """Evaluar el modelo entrenado"""
@@ -771,14 +999,9 @@ class HNAFGUI:
         print("EVALUACIÓN DEL MODELO")
         print("="*60)
         
-        # Importar módulo de evaluación
-        from final_app.evaluation_manager import EvaluationManager
-        
-        # Crear manager de evaluación
-        eval_manager = EvaluationManager()
-        
-        # Ejecutar evaluación
-        eval_results = eval_manager.evaluate_model(self.hnaf_model)
+        # Evaluación simple
+        if hasattr(self.hnaf_model, 'verify_hnaf'):
+            self.hnaf_model.verify_hnaf()
         
         print("="*60)
     
@@ -807,37 +1030,46 @@ class HNAFGUI:
         
         if not show_any or self.training_results is None:
             # Si no hay nada seleccionado o no hay resultados, limpiar el gráfico
-            self.fig.clear()
-            self.canvas.draw()
+            if hasattr(self, 'fig') and hasattr(self, 'canvas'):
+                self.fig.clear()
+                self.canvas.draw()
             return
 
-        # Llama al manager para que redibuje en el canvas principal
-        self.viz_manager.update_plots(self.fig, self.canvas, self.training_results,
-                                      show_rewards=self.show_rewards_var.get(),
-                                      show_precision=self.show_precision_var.get(),
-                                      show_loss=self.show_loss_var.get())
+        # Gráfico simple
+        if hasattr(self, 'fig') and hasattr(self, 'canvas'):
+            self.fig.clear()
+            ax = self.fig.add_subplot(111)
+            if 'episode_rewards' in self.training_results:
+                rewards = self.training_results['episode_rewards']
+                ax.plot(rewards)
+                ax.set_title('Recompensas por Episodio')
+            self.canvas.draw()
 
     def show_plots_in_popup(self):
         """Muestra los gráficos en una ventana emergente de alta resolución."""
         if not self.training_results or not MATPLOTLIB_AVAILABLE:
             if not MATPLOTLIB_AVAILABLE:
-                messagebox.showwarning("Gráficos no disponibles", 
-                                     "Matplotlib no está instalado. No se pueden mostrar gráficos.")
+                if not self.cli_mode:
+                    messagebox.showwarning("Gráficos no disponibles", 
+                                         "Matplotlib no está instalado. No se pueden mostrar gráficos.")
             return
 
-        popup = tk.Toplevel(self.root)
-        popup.title("Gráficos de Resultados en Alta Resolución")
-        popup.geometry("1200x800")
+        if not self.cli_mode:
+            popup = tk.Toplevel(self.root)
+            popup.title("Gráficos de Resultados")
+            popup.geometry("800x600")
 
-        # DPI alto para mayor resolución y mostrar todos los gráficos por defecto
-        fig_popup = plt.Figure(figsize=(12, 8), dpi=150)
-        canvas_popup = FigureCanvasTkAgg(fig_popup, master=popup)
-        canvas_popup.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            # Gráfico simple
+            fig_popup = plt.Figure(figsize=(8, 6), dpi=100)
+            canvas_popup = FigureCanvasTkAgg(fig_popup, master=popup)
+            canvas_popup.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.viz_manager.update_plots(fig_popup, canvas_popup, self.training_results,
-                                      show_rewards=True,
-                                      show_precision=True,
-                                      show_loss=True)
+            ax = fig_popup.add_subplot(111)
+            if 'episode_rewards' in self.training_results:
+                rewards = self.training_results['episode_rewards']
+                ax.plot(rewards)
+                ax.set_title('Recompensas por Episodio')
+            canvas_popup.draw()
 
     def run_training_thread(self):
         """Ejecuta el entrenamiento en un hilo separado."""
@@ -912,17 +1144,20 @@ class HNAFGUI:
             best_params = optimizer.get_best_params()
             
             if best_params:
-                # Aplicar mejores parámetros a la UI
-                self.hidden_dim_var.set(best_params.get('hidden_dim', 64))
-                self.num_layers_var.set(best_params.get('num_layers', 3))
-                self.learning_rate_var.set(best_params.get('lr', 1e-4))
-                self.batch_size_var.set(best_params.get('batch_size', 32))
-                self.initial_epsilon_var.set(best_params.get('initial_epsilon', 0.5))
-                self.final_epsilon_var.set(best_params.get('final_epsilon', 0.05))
-                self.max_steps_var.set(str(best_params.get('max_steps', 20)))
-                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', 5000)))
-                self.alpha_var.set(str(best_params.get('alpha', 0.6)))
-                self.beta_var.set(str(best_params.get('beta', 0.4)))
+                # Aplicar mejores parámetros a la UI (con fallbacks desde configuración)
+                network_defaults = self.config_manager.get_network_defaults()
+                training_defaults = self.config_manager.get_training_defaults()
+                
+                self.hidden_dim_var.set(best_params.get('hidden_dim', network_defaults['hidden_dim']))
+                self.num_layers_var.set(best_params.get('num_layers', network_defaults['num_layers']))
+                self.learning_rate_var.set(best_params.get('lr', training_defaults['learning_rate']))
+                self.batch_size_var.set(best_params.get('batch_size', training_defaults['batch_size']))
+                self.initial_epsilon_var.set(best_params.get('initial_epsilon', training_defaults['initial_epsilon']))
+                self.final_epsilon_var.set(best_params.get('final_epsilon', training_defaults['final_epsilon']))
+                self.max_steps_var.set(str(best_params.get('max_steps', training_defaults['max_steps'])))
+                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', training_defaults['buffer_capacity'])))
+                self.alpha_var.set(str(best_params.get('alpha', training_defaults['alpha'])))
+                self.beta_var.set(str(best_params.get('beta', training_defaults['beta'])))
                 
                 print("Mejores parámetros cargados desde optimización automática")
                 print(f"   Score: {optimizer.best_score:.4f}")
@@ -950,17 +1185,25 @@ class HNAFGUI:
             # Crear optimizador Optuna
             self.optuna_optimizer = OptunaOptimizer()
             
+            # FORZAR configuración ilimitada (para optimización nocturna)
+            self.optuna_optimizer.max_iterations = None
+            self.optuna_optimizer.timeout_minutes = None
+            # Usar configuración en lugar de hardcodear
+            hardcode_config = self.config_manager.get_hardcode_elimination_config()
+            self.optuna_optimizer.evaluation_episodes = hardcode_config['optuna']['default_evaluation_episodes']
+            print(f"🔄 Configuración Optuna forzada: max_iterations={self.optuna_optimizer.max_iterations}, timeout={self.optuna_optimizer.timeout_minutes}, episodes={self.optuna_optimizer.evaluation_episodes}")
+            
             # Actualizar UI
             self.start_optuna_button.config(state=tk.DISABLED)
             self.stop_optuna_button.config(state=tk.NORMAL)
-            self.optuna_status_var.set("Optimización Optuna: Ejecutando...")
+            self.optuna_status_var.set("Optimización Optuna: Ejecutando (SIN LÍMITES)...")
             self.optuna_progress_var.set(0)
             
-            # Callback para actualizar progreso
+            # Callback para actualizar progreso (SIN límite de 50)
             def update_optuna_progress(iteration, current_score, best_score):
-                progress = (iteration / 50) * 100  # 50 iteraciones máximo
-                self.optuna_progress_var.set(progress)
-                self.optuna_status_var.set(f"Optimización Optuna: Iteración {iteration}/50 - Score: {current_score:.4f} (Mejor: {best_score:.4f})")
+                # Sin límite máximo - solo mostrar progreso continuo
+                self.optuna_progress_var.set(min(iteration * 2, 100))  # Progreso visual
+                self.optuna_status_var.set(f"Optimización Optuna: Trial {iteration} - Score: {current_score:.4f} (Mejor: {best_score:.4f}) [SIN LÍMITES]")
                 self.root.update_idletasks()
             
             # Iniciar optimización en thread separado
@@ -997,17 +1240,20 @@ class HNAFGUI:
             best_params = optimizer.get_best_params()
             
             if best_params:
-                # Aplicar mejores parámetros a la UI
-                self.hidden_dim_var.set(best_params.get('hidden_dim', 64))
-                self.num_layers_var.set(best_params.get('num_layers', 3))
-                self.learning_rate_var.set(best_params.get('lr', 1e-3))
-                self.batch_size_var.set(best_params.get('batch_size', 64))
-                self.initial_epsilon_var.set(best_params.get('initial_epsilon', 0.5))
-                self.final_epsilon_var.set(best_params.get('final_epsilon', 0.01))
-                self.max_steps_var.set(str(best_params.get('max_steps', 30)))
-                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', 5000)))
-                self.alpha_var.set(str(best_params.get('alpha', 0.6)))
-                self.beta_var.set(str(best_params.get('beta', 0.4)))
+                # Aplicar mejores parámetros a la UI (con fallbacks desde configuración)
+                network_defaults = self.config_manager.get_network_defaults()
+                training_defaults = self.config_manager.get_training_defaults()
+                
+                self.hidden_dim_var.set(best_params.get('hidden_dim', network_defaults['hidden_dim']))
+                self.num_layers_var.set(best_params.get('num_layers', network_defaults['num_layers']))
+                self.learning_rate_var.set(best_params.get('lr', training_defaults['learning_rate']))
+                self.batch_size_var.set(best_params.get('batch_size', training_defaults['batch_size']))
+                self.initial_epsilon_var.set(best_params.get('initial_epsilon', training_defaults['initial_epsilon']))
+                self.final_epsilon_var.set(best_params.get('final_epsilon', training_defaults['final_epsilon']))
+                self.max_steps_var.set(str(best_params.get('max_steps', training_defaults['max_steps'])))
+                self.buffer_capacity_var.set(str(best_params.get('buffer_capacity', training_defaults['buffer_capacity'])))
+                self.alpha_var.set(str(best_params.get('alpha', training_defaults['alpha'])))
+                self.beta_var.set(str(best_params.get('beta', training_defaults['beta'])))
                 
                 print("Mejores parámetros de Optuna aplicados a la interfaz")
             else:
@@ -1015,6 +1261,70 @@ class HNAFGUI:
                 
         except Exception as e:
             print(f"Error cargando mejores parámetros de Optuna: {e}")
+    
+    def apply_optuna_to_config(self):
+        """Aplicar mejores parámetros de Optuna al config.yaml"""
+        try:
+            from final_app.optuna_optimizer import OptunaOptimizer
+            
+            # Crear instancia del optimizador
+            optimizer = OptunaOptimizer()
+            
+            # Verificar que hay parámetros optimizados
+            if not optimizer.best_params:
+                messagebox.showwarning("Sin Parámetros", 
+                                     "No hay parámetros optimizados de Optuna para aplicar.\n"
+                                     "Ejecuta primero la optimización de Optuna.")
+                return
+            
+            # Confirmar con el usuario
+            response = messagebox.askyesno(
+                "Confirmar Actualización",
+                f"¿Aplicar los mejores parámetros de Optuna al config.yaml?\n\n"
+                f"Score: {optimizer.best_score:.4f}\n"
+                f"Parámetros: {list(optimizer.best_params.keys())}\n\n"
+                f"Se creará un backup automático del config.yaml actual."
+            )
+            
+            if not response:
+                return
+            
+            # Aplicar parámetros al config.yaml
+            print("🔄 Aplicando mejores parámetros de Optuna a config.yaml...")
+            success = optimizer.update_config_yaml()
+            
+            if success:
+                # Mostrar éxito
+                messagebox.showinfo(
+                    "Config.yaml Actualizado",
+                    f"✅ Config.yaml actualizado exitosamente con mejores parámetros de Optuna!\n\n"
+                    f"📊 Score: {optimizer.best_score:.4f}\n"
+                    f"🔧 Parámetros actualizados: {len(optimizer.best_params)}\n"
+                    f"📁 Backup creado automáticamente\n\n"
+                    f"⚠️ Reinicia la aplicación para usar los nuevos valores por defecto."
+                )
+                
+                # Opcional: Cargar también los parámetros en la GUI actual
+                confirm_load = messagebox.askyesno(
+                    "Cargar en GUI",
+                    "¿También cargar estos parámetros en la GUI actual?"
+                )
+                
+                if confirm_load:
+                    self.load_optuna_params()
+                    
+            else:
+                # Mostrar error
+                messagebox.showerror(
+                    "Error",
+                    "❌ Error actualizando config.yaml.\n"
+                    "Los parámetros siguen disponibles en el archivo JSON.\n"
+                    "Revisa la consola para más detalles."
+                )
+                
+        except Exception as e:
+            print(f"❌ Error aplicando parámetros de Optuna a config.yaml: {e}")
+            messagebox.showerror("Error", f"Error aplicando parámetros: {e}")
 
     def on_closing(self):
         """Maneja el evento de cierre de la ventana."""
@@ -1026,16 +1336,131 @@ class HNAFGUI:
         if hasattr(self, 'optuna_optimizer') and self.optuna_optimizer.is_running:
             self.optuna_optimizer.stop_optimization()
         
+        # Detener monitoreo de configuración si está activo
+        if hasattr(self, 'auto_reload_enabled') and self.auto_reload_enabled:
+            self.stop_config_monitor()
+        
         print("DEBUG: Cerrando aplicación")
         sys.stdout = sys.__stdout__  # Restaurar stdout
         self.root.destroy()
+    
+    def toggle_smart_reward(self):
+        """Alternar entre función tradicional y función inteligente"""
+        if self.smart_reward_var.get():
+            print("🧠 Activada: Función de recompensa inteligente (mode-aware)")
+            # Mensaje informativo
+            print("   ✅ La función enseñará al agente qué modo elegir")
+            print("   ✅ Penalizará elección incorrecta de modo")
+            print("   ✅ Usará matrices dinámicas desde GUI")
+        else:
+            print("📊 Activada: Función de recompensa tradicional")
+            print(f"   📝 Usando expresión: {self.reward_expr_var.get()}")
+    
+    def _init_cli_variables(self):
+        """Inicializar variables necesarias para modo CLI"""
+        # Cargar valores por defecto desde configuración
+        network_defaults = self.config_manager.get_network_defaults()
+        training_defaults = self.config_manager.get_training_defaults()
+        
+        # Variables de red neuronal
+        self.state_dim_var = tk.IntVar(value=network_defaults['state_dim'])
+        self.action_dim_var = tk.IntVar(value=network_defaults['action_dim'])
+        self.num_modes_var = tk.IntVar(value=network_defaults['num_modes'])
+        self.hidden_dim_var = tk.IntVar(value=network_defaults['hidden_dim'])
+        self.num_layers_var = tk.IntVar(value=network_defaults['num_layers'])
+        
+        # Variables de entrenamiento
+        self.learning_rate_var = tk.DoubleVar(value=training_defaults['learning_rate'])
+        self.tau_var = tk.DoubleVar(value=training_defaults['tau'])
+        self.gamma_var = tk.DoubleVar(value=training_defaults['gamma'])
+        self.num_episodes_var = tk.IntVar(value=training_defaults['num_episodes'])
+        self.batch_size_var = tk.IntVar(value=training_defaults['batch_size'])
+        self.initial_epsilon_var = tk.DoubleVar(value=training_defaults['initial_epsilon'])
+        self.final_epsilon_var = tk.DoubleVar(value=training_defaults['final_epsilon'])
+        self.max_steps_var = tk.StringVar(value=str(training_defaults['max_steps']))
+        self.buffer_capacity_var = tk.StringVar(value=str(training_defaults['buffer_capacity']))
+        self.alpha_var = tk.StringVar(value=str(training_defaults['alpha']))
+        self.beta_var = tk.StringVar(value=str(training_defaults['beta']))
+        self.supervised_episodes_var = tk.IntVar(value=training_defaults['supervised_episodes'])
+        
+        # Variables de checkboxes
+        self.reward_normalize_var = tk.BooleanVar(value=self.checkbox_defaults['reward_normalize'])
+        self.reward_shaping_var = tk.BooleanVar(value=self.checkbox_defaults['reward_shaping'])
+        self.smart_reward_var = tk.BooleanVar(value=self.checkbox_defaults['smart_reward'])
+        
+        # Variables de coordenadas
+        self.x0_var = tk.StringVar(value=str(self.defaults_config['coordinates']['x0']))
+        self.y0_var = tk.StringVar(value=str(self.defaults_config['coordinates']['y0']))
+        
+        # Variables de matrices A1 y A2
+        self.a1_vars = []
+        self.a2_vars = []
+        default_A1 = self.defaults_config['matrices']['A1']
+        default_A2 = self.defaults_config['matrices']['A2']
+        
+        for i in range(2):
+            row1 = []
+            row2 = []
+            for j in range(2):
+                var1 = tk.StringVar(value=str(default_A1[i][j]))
+                var2 = tk.StringVar(value=str(default_A2[i][j]))
+                row1.append(var1)
+                row2.append(var2)
+            self.a1_vars.append(row1)
+            self.a2_vars.append(row2)
+        
+        # Variables de función de recompensa
+        self.reward_expr_var = tk.StringVar(value=self.defaults_config['matrices']['reward_function'])
+        self.reward_optimization_var = tk.StringVar(value=self.defaults_config['matrices']['reward_optimization'])
+        
+        # Variables de control
+        self.use_custom_functions_var = tk.BooleanVar(value=self.checkbox_defaults['use_custom_functions'])
+        
+        print("✅ Variables CLI inicializadas con valores por defecto")
+    
+    def run(self):
+        """Ejecutar la GUI"""
+        if not self.cli_mode:
+            self.root.mainloop()
+    
+    def run_training_cli(self):
+        """Ejecutar entrenamiento en modo CLI (exactamente como GUI)"""
+        if self.cli_mode:
+            print("🎮 EJECUTANDO CÓDIGO IDÉNTICO A LA GUI")
+            print("="*50)
+            
+            # Obtener parámetros exactamente como la GUI
+            params = self.get_training_parameters()
+            
+            print("📋 Parámetros obtenidos (idénticos a GUI):")
+            for key, value in params.items():
+                if key != 'gui_matrices':
+                    print(f"   {key}: {value}")
+            print(f"   gui_matrices: A1={params['gui_matrices']['A1']}, A2={params['gui_matrices']['A2']}")
+            
+            # Ejecutar entrenamiento exactamente como la GUI
+            print("\n🚀 Iniciando entrenamiento...")
+            self.start_training()
+            
+            # Esperar a que termine (en CLI, corremos síncronamente)
+            if self.training_thread:
+                self.training_thread.join()
+            
+            print("✅ Entrenamiento completado")
+            return True
+        else:
+            print("❌ Error: run_training_cli solo funciona en modo CLI")
+            return False
 
 def main():
     """Función principal"""
     print("DEBUG: Iniciando aplicación HNAF GUI")
     root = tk.Tk()
     print("DEBUG: Ventana principal creada")
-    app = HNAFGUI(root)
+    
+    # Crear config_manager
+    config_manager = get_config_manager()
+    app = HNAFGUI(root=root, config_manager=config_manager)
     print("DEBUG: Interfaz HNAF creada")
     
     # Configurar cierre limpio

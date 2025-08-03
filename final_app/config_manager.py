@@ -26,10 +26,14 @@ class ConfigManager:
         
     def _find_config_file(self) -> str:
         """Buscar el archivo config.yaml en el proyecto"""
-        # Buscar desde el directorio actual hacia arriba
+        # Buscar primero en el directorio actual (final_app/)
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
+        config_path = os.path.join(current_dir, 'config.yaml')
+        if os.path.exists(config_path):
+            return config_path
         
+        # Si no se encuentra, buscar en el directorio padre
+        project_root = os.path.dirname(current_dir)
         config_path = os.path.join(project_root, 'config.yaml')
         if os.path.exists(config_path):
             return config_path
@@ -37,7 +41,9 @@ class ConfigManager:
         # Si no se encuentra, crear uno por defecto
         raise FileNotFoundError(
             f"❌ ERROR CRÍTICO: config.yaml no encontrado\n"
-            f"   Buscado en: {config_path}\n"
+            f"   Buscado en:\n"
+            f"   - {os.path.join(current_dir, 'config.yaml')}\n"
+            f"   - {config_path}\n"
             f"   APLICACIÓN ABORTADA - Crea archivo config.yaml"
         )
     
@@ -76,7 +82,7 @@ class ConfigManager:
         
         Args:
             key_path: Ruta del valor (ej: 'network.defaults.hidden_dim')
-            default: Valor por defecto si no se encuentra
+            default: Valor por defecto si no se encuentra (SIEMPRE None para fallar en errores)
             
         Returns:
             Valor de configuración
@@ -89,13 +95,13 @@ class ConfigManager:
                 if isinstance(value, dict) and key in value:
                     value = value[key]
                 else:
-                    if default is None:
-                        error_msg = f"❌ ERROR CRÍTICO: Parámetro de configuración no encontrado\n" \
-                                   f"   Clave: {key_path}\n" \
-                                   f"   APLICACIÓN ABORTADA - Agrega parámetro a config.yaml"
-                        print(error_msg)
-                        raise RuntimeError(f"Parámetro {key_path} no encontrado en configuración")
-                    return default
+                    # SIEMPRE fallar si no se encuentra el parámetro (sin fallbacks)
+                    error_msg = f"❌ ERROR CRÍTICO: Parámetro de configuración no encontrado\n" \
+                               f"   Clave: {key_path}\n" \
+                               f"   Clave faltante: {key}\n" \
+                               f"   APLICACIÓN ABORTADA - Corrige el nombre del parámetro en config.yaml"
+                    print(error_msg)
+                    raise RuntimeError(f"Parámetro {key_path} no encontrado en configuración")
                     
             return value
             
@@ -106,6 +112,10 @@ class ConfigManager:
                        f"   APLICACIÓN ABORTADA - Revisa config.yaml"
             print(error_msg)
             raise RuntimeError(f"Error accediendo configuración {key_path}: {e}")
+    
+    def get_hardcode_elimination_config(self) -> Dict[str, Any]:
+        """Obtener configuración para eliminar valores hardcodeados"""
+        return self.get('hardcode_elimination')
     
     def get_network_defaults(self) -> Dict[str, Any]:
         """Obtener parámetros por defecto de la red neuronal"""
@@ -130,7 +140,8 @@ class ConfigManager:
             'max_steps': self.get('training.defaults.max_steps'),
             'buffer_capacity': self.get('training.defaults.buffer_capacity'),
             'alpha': self.get('training.defaults.alpha'),
-            'beta': self.get('training.defaults.beta')
+            'beta': self.get('training.defaults.beta'),
+            'supervised_episodes': self.get('training.defaults.supervised_episodes')
         }
     
     def get_network_ranges(self) -> Dict[str, Any]:

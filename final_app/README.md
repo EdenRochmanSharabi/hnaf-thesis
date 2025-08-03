@@ -1,179 +1,204 @@
-# HNAF - Aplicación Modular
+# HNAF Application - Versión Final
 
-## 📁 Estructura del Proyecto
+Esta carpeta contiene la aplicación HNAF completamente funcional y optimizada.
 
-```
-final_app/
-├── main.py                    # Punto de entrada principal
-├── gui_interface.py           # Interfaz gráfica
-├── training_manager.py        # Lógica de entrenamiento
-├── evaluation_manager.py      # Evaluación de modelos
-├── visualization_manager.py   # Gráficos y visualizaciones
-└── README.md                 # Este archivo
-```
+## 📁 Estructura de Archivos
 
-## 🚀 Cómo Ejecutar
+### Archivos Principales
+- **`app.py`** - Punto de entrada principal de la aplicación
+- **`gui_interface.py`** - Interfaz gráfica completa
+- **`training_manager.py`** - Gestor de entrenamiento optimizado
+- **`config_manager.py`** - Gestor de configuración sin hardcode
+- **`optuna_optimizer.py`** - Optimización automática de hiperparámetros
+- **`logging_manager.py`** - Sistema de logging estructurado
+- **`config.yaml`** - Configuración centralizada
 
-### Opción 1: Desde el directorio raíz
+## 🚀 Uso Rápido
+
+### Ejecutar GUI (Interfaz Gráfica)
 ```bash
-cd final_app
-python main.py
+python app.py
 ```
 
-### Opción 2: Desde el directorio padre
+### Ejecutar en Modo CLI (Línea de Comandos)
 ```bash
-python final_app/main.py
+python app.py --cli
 ```
 
-## 🧩 Arquitectura Modular
-
-### 1. **main.py** - Punto de Entrada
-- Inicializa la aplicación
-- Configura el path para importar módulos
-- Crea la ventana principal
-- Maneja el cierre limpio
-
-### 2. **gui_interface.py** - Interfaz Gráfica
-- Maneja toda la interfaz de usuario
-- Controles de parámetros
-- Editor de funciones personalizadas
-- Visualización en tiempo real
-- **No contiene lógica de entrenamiento**
-
-### 3. **training_manager.py** - Entrenamiento
-- Maneja toda la lógica de entrenamiento
-- Creación del modelo HNAF
-- Configuración de parámetros
-- Ejecución de episodios
-- **Separado de la interfaz**
-
-### 4. **evaluation_manager.py** - Evaluación
-- Evaluación de modelos entrenados
-- Comparación entre modelos
-- Verificación de funcionamiento
-- Métricas de rendimiento
-
-### 5. **visualization_manager.py** - Visualización
-- Gráficos de entrenamiento
-- Mapas de calor
-- Comparaciones visuales
-- Guardado de gráficos
-
-## 🎯 Ventajas de la Arquitectura Modular
-
-### ✅ **Separación de Responsabilidades**
-- GUI solo maneja la interfaz
-- Entrenamiento solo maneja la lógica
-- Evaluación solo maneja métricas
-- Visualización solo maneja gráficos
-
-### ✅ **Mantenibilidad**
-- Cada módulo es independiente
-- Fácil de modificar sin afectar otros
-- Código más limpio y organizado
-
-### ✅ **Reutilización**
-- Módulos pueden usarse independientemente
-- Fácil de integrar en otros proyectos
-- Testing individual por módulo
-
-### ✅ **Escalabilidad**
-- Fácil agregar nuevos módulos
-- Fácil modificar funcionalidades
-- Fácil de limpiar y reorganizar
-
-## 🔧 Uso de los Módulos
-
-### Entrenamiento Independiente
-```python
-from training_manager import TrainingManager
-
-manager = TrainingManager()
-params = {
-    'state_dim': 2,
-    'action_dim': 2,
-    'num_modes': 2,
-    'hidden_dim': 64,
-    'num_layers': 3,
-    'lr': 1e-4,
-    'tau': 0.001,
-    'gamma': 0.9,
-    'num_episodes': 1000,
-    'batch_size': 32,
-    'initial_epsilon': 0.5,
-    'final_epsilon': 0.05,
-    'max_steps': 50
-}
-
-model, results = manager.train_hnaf(params)
+### Solo Entrenamiento
+```bash
+python app.py --train --iterations 3
 ```
 
-### Evaluación Independiente
-```python
-from evaluation_manager import EvaluationManager
-
-eval_manager = EvaluationManager()
-results = eval_manager.evaluate_model(model)
+### Optimización Automática
+```bash
+python app.py --optimize
 ```
 
-### Visualización Independiente
-```python
-from visualization_manager import VisualizationManager
-
-viz_manager = VisualizationManager()
-fig = viz_manager.create_comparison_plot(results1, results2)
+### Análisis de Estabilidad
+```bash
+python app.py --stability
 ```
 
-## 📊 Funcionalidades
+### Loop de Mejora Automática
+```bash
+python app.py --improve --iterations 5 --target 80.0
+```
 
-### 🎮 **Interfaz Gráfica**
-- Parámetros configurables
-- Editor de funciones personalizadas
-- Visualización en tiempo real
-- Barra de progreso
-- Salida de terminal integrada
+## 📊 Funcionalidades Principales
 
-### 🧠 **Entrenamiento Avanzado**
-- ε-greedy decay (0.5 → 0.05)
-- Prioritized Experience Replay
+### 1. **GUI Completa**
+- Interfaz gráfica moderna y responsive
+- Configuración dinámica desde `config.yaml`
+- Visualización de resultados en tiempo real
+- Optimización integrada con Optuna
+- Auto-recarga de configuración
+
+### 2. **Entrenamiento Avanzado**
+- HNAF mejorado con estabilización
+- Gradient clipping para prevenir explosión de gradientes
 - Normalización de estados y recompensas
-- Reward shaping local
-- Red neuronal profunda (3 capas, 64 unidades)
+- Curriculum learning automático
+- Warm-up supervisado balanceado
 
-### 📈 **Evaluación Robusta**
-- Evaluación en grid 100x100
-- Métricas de precisión
-- Comparación entre modelos
-- Verificación de funcionamiento
+### 3. **Optimización Automática**
+- Búsqueda de hiperparámetros con Optuna
+- Actualización automática de configuración
+- Análisis de rendimiento detallado
+- Backup automático de configuraciones
 
-### 📊 **Visualización Completa**
-- Gráficos de recompensas
-- Mapas de calor de decisiones
-- Comparaciones visuales
-- Guardado de gráficos
+### 4. **Configuración Centralizada**
+- Todo configurado desde `config.yaml`
+- Sin valores hardcodeados
+- Auto-recarga de cambios
+- Validación estricta de parámetros
 
-## 🛠️ Dependencias
+### 5. **Estabilización Avanzada**
+- Recompensas normalizadas con `tanh`
+- Clipping de gradientes
+- Normalización de estados
+- Manejo robusto de errores
 
+## 🔧 Configuración
+
+La configuración se maneja completamente a través de `config.yaml`:
+
+- **Parámetros de red**: Dimensiones, capas, inicialización
+- **Parámetros de entrenamiento**: Learning rate, episodios, batch size
+- **Funciones de recompensa**: Expresiones personalizables
+- **Matrices de transformación**: A1 y A2 configurables
+- **Optimización**: Parámetros de Optuna y estabilización
+
+## 📈 Monitoreo y Logging
+
+### Sistema de Logs
+- Logs estructurados en `logs/`
+- Niveles configurables (DEBUG, INFO, WARNING, ERROR)
+- Rotación automática de archivos
+- Contexto detallado de errores
+
+### Métricas en Tiempo Real
+- Precisión del modelo
+- Estabilidad del sistema
+- Pérdidas durante entrenamiento
+- Balance de modos
+- Progreso de optimización
+
+## 🎯 Características Técnicas
+
+### Estabilización
+- **Gradient Clipping**: `max_norm=1.0`
+- **Recompensas Normalizadas**: Rango [-1, 1] con `tanh`
+- **Normalización de Estados**: Media=0, Std=1
+- **Clipping de Recompensas**: Prevención de valores extremos
+
+### Optimizaciones
+- **Prioritized Experience Replay**: Con parámetros α y β
+- **ε-greedy Decay**: Exploración controlada
+- **Curriculum Learning**: Dificultad progresiva
+- **Warm-up Supervisado**: Enseñanza balanceada
+
+### Configuración Dinámica
+- **Auto-recarga**: Monitoreo de cambios en `config.yaml`
+- **Validación Estricta**: Sin fallbacks, errores inmediatos
+- **Backup Automático**: Preservación de configuraciones
+- **Sincronización GUI**: Cambios reflejados automáticamente
+
+## 🛠️ Comandos Útiles
+
+### Entrenamiento Rápido
 ```bash
-pip install torch numpy matplotlib scipy tkinter
+python app.py --train --iterations 1
 ```
 
-## 🎯 Resultados Esperados
+### Optimización Completa
+```bash
+python app.py --optimize
+```
 
-Con esta arquitectura modular, obtienes:
-- **Código más limpio** y organizado
-- **Fácil mantenimiento** y debugging
-- **Reutilización** de componentes
-- **Escalabilidad** para futuras mejoras
-- **Testing individual** por módulo
+### Análisis de Estabilidad
+```bash
+python app.py --stability
+```
 
-## 🔄 Flujo de Trabajo
+### Mejora Automática
+```bash
+python app.py --improve --iterations 10 --target 85.0
+```
 
-1. **Ejecutar aplicación**: `python final_app/main.py`
-2. **Configurar parámetros** en la interfaz
-3. **Iniciar entrenamiento** con el botón
-4. **Evaluar modelo** cuando termine
-5. **Verificar funcionamiento** si es necesario
-6. **Analizar gráficos** para entender resultados
+## 📋 Funcionalidades de la GUI
 
-¡La aplicación modular está lista para usar! 🚀 
+### Controles Principales
+- **Iniciar Entrenamiento**: Entrenamiento completo con GUI
+- **Evaluar Modelo**: Análisis de rendimiento
+- **Verificar HNAF**: Validación del modelo
+- **Limpiar Salida**: Limpieza de logs
+
+### Configuración Dinámica
+- **Recargar Config**: Carga manual desde `config.yaml`
+- **Auto-recargar**: Monitoreo automático de cambios
+- **Mostrar Config**: Visualización de configuración actual
+- **Guardar**: Persistencia de cambios en `config.yaml`
+
+### Optimización
+- **Optimización Optuna**: Búsqueda automática de hiperparámetros
+- **Aplicar a Config.yaml**: Actualización automática de configuración
+- **Cargar Mejores Parámetros**: Aplicación de resultados optimizados
+
+## 🎯 Objetivos de Rendimiento
+
+- **Precisión objetivo**: >80%
+- **Estabilidad objetivo**: >70%
+- **Balance de modos**: 50/50 ±10%
+- **Pérdidas controladas**: <10K
+
+## 📞 Soporte
+
+### Logs Detallados
+Los logs se guardan en `logs/` con información completa de:
+- Entrenamiento y optimización
+- Errores y advertencias
+- Análisis de estabilidad
+- Configuración y cambios
+
+### Debugging
+Para obtener información detallada:
+```bash
+python app.py --cli --iterations 1
+```
+
+### Configuración
+- Verificar `config.yaml` para parámetros
+- Usar "Mostrar Config" en la GUI
+- Revisar logs para errores específicos
+
+---
+
+**¡La aplicación está completamente funcional y lista para usar!** 🚀
+
+**Características destacadas:**
+- ✅ **Estable**: Gradient clipping y normalización
+- ✅ **Configurable**: Todo desde `config.yaml`
+- ✅ **Optimizada**: Auto-recarga y sincronización
+- ✅ **Robusta**: Manejo completo de errores
+- ✅ **Completa**: GUI, CLI y optimización automática 
