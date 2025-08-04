@@ -45,6 +45,16 @@ defaults:
       - -1
     - - 50
       - 1
+    A3:
+    - - 0.9
+      - 0.1
+      - 0.0
+    - - 0.0
+      - 0.9
+      - 0.1
+    - - 0.1
+      - 0.0
+      - 0.9
     reward_function: "-np.tanh(np.linalg.norm([x, y]) * 0.1)"
     reward_optimization: minimizar
 hardcode_elimination:
@@ -105,11 +115,11 @@ logging:
   max_file_size_mb: 10
 network:
   defaults:
-    action_dim: 2
+    action_dim: 2  # Cambiar a 3 para sistemas 3x3
     hidden_dim: 512
     num_layers: 3
-    num_modes: 2
-    state_dim: 2
+    num_modes: 2  # Cambiar a 3 para sistemas 3x3
+    state_dim: 2  # Cambiar a 3 para sistemas 3x3
     weight_initialization: xavier_uniform
     bias_initialization: zeros
   ranges:
@@ -212,8 +222,8 @@ reward_shaping:
       state_range: 0.3
   enabled: false
   mode_aware:
-    correct_mode_multiplier: 0.1
-    incorrect_mode_multiplier: 2.0
+    correct_mode_multiplier: 0.05  # Más fuerte para modo correcto
+    incorrect_mode_multiplier: 3.0  # Más fuerte para modo incorrecto
   state_initialization:
     convergence_threshold: 0.01
     max_range: 0.5
@@ -251,14 +261,14 @@ training:
     batch_size: 256
     beta: 0.9
     buffer_capacity: 20000
-    final_epsilon: 0.3
-    gamma: 0.999
-    initial_epsilon: 0.5
-    learning_rate: 3.94e-06
+    final_epsilon: 0.4  # Aumentado para más exploración
+    gamma: 0.995  # Aumentar visión a largo plazo
+    initial_epsilon: 0.8  # Aumentado para más exploración inicial
+    learning_rate: 5.0e-05  # Refinamiento final para ajuste más fino
     max_steps: 200
-    num_episodes: 2000
-    supervised_episodes: 100
-    tau: 0.01
+    num_episodes: 2500  # Extender entrenamiento para perfeccionamiento
+    supervised_episodes: 500  # Más episodios supervisados para base sólida
+    tau: 0.01  # Acelerar incorporación de conocimiento
     gradient_clip: 0.5
   evaluation:
     grid_size: 50
@@ -313,7 +323,7 @@ training:
     - 200
     num_episodes:
     - 100
-    - 5000
+    - 1000
     priority_increment: 0.1
     supervised_episodes:
     - 0
@@ -323,3 +333,8 @@ training:
     - 0.0001
     - 0.01
     tau_increment: 0.0001
+
+# Configuración de la interfaz gráfica
+gui:
+  defaults:
+    gui_reward_function: mode_aware_reward  # Función de recompensa original centrada en estabilización

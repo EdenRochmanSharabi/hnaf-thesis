@@ -215,7 +215,7 @@ class OptunaOptimizer:
             'reward_optimization': 'minimizar',  # Fijo
             'gui_reward_function': trial.suggest_categorical("reward_function", [
                 'np.linalg.norm([x, y])',  # Función original
-                'mode_aware_reward'  # Nueva función inteligente
+                'mode_aware_reward'  # Función de recompensa original centrada en estabilización
             ]),
             'gui_matrices': self._get_dynamic_matrices(trial, config_manager)
         }
@@ -244,9 +244,9 @@ class OptunaOptimizer:
             
             # 🚀 SOLUCIÓN: Crear NUEVA instancia del TrainingManager para cada trial
             # Esto evita la "fuga de estado" entre pruebas de Optuna
-            print(f"🆕 Creando NUEVA instancia para trial #{trial.number} - Sin fuga de estado")
+            print(f"🆕 Creando NUEVA instancia para trial - Sin fuga de estado")
             training_manager = TrainingManager()
-            model, training_results = training_manager.train_hnaf(params)
+            hnaf_model, training_results = training_manager.train_hnaf(params)
             
             if training_results and 'grid_accuracies' in training_results:
                 final_accuracy = training_results['grid_accuracies'][-1] if training_results['grid_accuracies'] else 0
