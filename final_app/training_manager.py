@@ -630,8 +630,38 @@ class TrainingManager:
                 next_state[0], next_state[1], state[0], state[1], mode, action, previous_state
             )
             
-            # Almacenar transición en el buffer de repetición
+            # Almacenar la transición REAL
             self.hnaf_model.step(state, mode, action, reward, next_state)
+            
+            # --- INICIO DE IMAGINATION ROLLOUTS ---
+            advanced_config = self.config_manager.get_advanced_config()
+            imagination_rollouts = advanced_config.get('imagination_rollouts', 5)
+            
+            if self.hnaf_model.replay_buffers[mode].can_provide_sample(self.hnaf_model.batch_size):
+                # Usar el estado actual como punto de partida para la imaginación
+                imagined_state = state.copy()
+                for _ in range(imagination_rollouts):
+                    # El agente imagina tomar una acción desde el estado imaginado
+                    imagined_mode, imagined_action = self.hnaf_model.select_action(imagined_state, epsilon=0.0) # Explotación en la imaginación
+                    
+                    # Simular el siguiente estado usando el modelo del mundo (matrices A)
+                    A_imagined = A1 if imagined_mode == 0 else A2
+                    next_imagined_state = (A_imagined @ imagined_state.reshape(-1, 1)).flatten()
+                    
+                    # Limitar estados imaginados
+                    next_imagined_state = np.clip(next_imagined_state, state_limits['min'], state_limits['max'])
+                    
+                    # Calcular recompensa para la transición imaginada
+                    imagined_reward = self.hnaf_model.reward_function(
+                        next_imagined_state[0], next_imagined_state[1], imagined_state[0], imagined_state[1], imagined_mode, imagined_action, imagined_state
+                    )
+                    
+                    # Almacenar la transición SINTÉTICA en el buffer
+                    self.hnaf_model.replay_buffers[imagined_mode].push(imagined_state, imagined_mode, imagined_action, imagined_reward, next_imagined_state)
+                    
+                    # Actualizar el estado para el siguiente paso de imaginación
+                    imagined_state = next_imagined_state
+            # --- FIN DE IMAGINATION ROLLOUTS ---
             
             # Actualizar estados
             previous_state = state.copy()

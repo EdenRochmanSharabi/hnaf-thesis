@@ -100,7 +100,7 @@ class ImprovedNAFNetwork(nn.Module):
         
     def forward(self, x, training=True):
         """
-        Forward pass con normalización
+        Forward pass con normalización y ARQUITECTURA DE DUELO
         """
         # Aplicar capas con normalización
         for i, (layer, bn) in enumerate(zip(self.layers, self.batch_norms)):
@@ -114,13 +114,16 @@ class ImprovedNAFNetwork(nn.Module):
                     x = bn(x)
             x = F.relu(x)  # ReLU para redes más profundas
         
-        # Valores de salida (escalas desde configuración)
+        # --- ARQUITECTURA DE DUELO ---
+        # Cabeza 1: Valor del Estado (V)
+        value = self.value_head(x)
+        
+        # Cabeza 2: Ventaja (A) - Componentes para NAF
         config_manager = get_config_manager()
         init_config = config_manager.get_initialization_config()
         network_init = init_config['network']
         tolerances = config_manager.get_tolerances()
         
-        V = self.value_head(x)
         mu = torch.tanh(self.mu_head(x)) * network_init['mu_scale']
         
         # Construir matriz L triangular inferior (parámetros configurables)
@@ -144,7 +147,7 @@ class ImprovedNAFNetwork(nn.Module):
                                            matrix_clamp_off_diag[0], matrix_clamp_off_diag[1])
                 idx += 1
         
-        return V, mu, L
+        return value, mu, L
     
     def get_P_matrix(self, x, training=True):
         """Calcula P(x,v) = L(x,v) * L(x,v)^T"""
@@ -222,6 +225,10 @@ class PrioritizedReplayBuffer:
     
     def __len__(self):
         return len(self.buffer)
+    
+    def can_provide_sample(self, batch_size):
+        """Verificar si el buffer puede proporcionar una muestra del tamaño especificado"""
+        return len(self.buffer) >= batch_size
 
 class ImprovedHNAF:
     """
@@ -230,7 +237,7 @@ class ImprovedHNAF:
     
     def __init__(self, state_dim=2, action_dim=2, num_modes=2, 
                  hidden_dim=64, num_layers=3, lr=1e-6, tau=1e-5, gamma=0.9,
-                 buffer_capacity=10000, alpha=0.6, beta=0.4, reward_normalize=True):
+                 buffer_capacity=10000, alpha=0.6, beta=0.4, reward_normalize=True, batch_size=32):
         
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -240,6 +247,7 @@ class ImprovedHNAF:
         self.tau = tau
         self.gamma = gamma
         self.reward_normalize = reward_normalize
+        self.batch_size = batch_size
         
         # Estadísticas para normalización
         self.state_mean = np.zeros(state_dim)
@@ -369,23 +377,24 @@ class ImprovedHNAF:
         return mode, action
     
     def compute_Q_value(self, state, action, mode):
-        """Calcular Q-value para un estado, acción y modo"""
+        """Calcular Q-value para un estado, acción y modo usando ARQUITECTURA DE DUELO"""
         state_tensor = torch.FloatTensor(self.normalize_state(state)).unsqueeze(0)
         action_tensor = torch.FloatTensor(action).unsqueeze(0)
         
         with torch.no_grad():
-            V, mu, P = self.networks[mode].get_P_matrix(state_tensor, training=False)
+            # --- ARQUITECTURA DE DUELO ---
+            value, mu, L = self.networks[mode].forward(state_tensor, training=False)
             
-            # Calcular Q-value con mejor manejo de valores pequeños
-            # Usar log1p para evitar problemas con valores muy pequeños
-            diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
-            # Asegurar que los elementos diagonales sean positivos (mínimo desde configuración)
-            tolerances = get_config_manager().get_tolerances()
-            diagonal_clamp_min = tolerances['diagonal_clamp_min']
-            diagonal_elements = torch.clamp(diagonal_elements, min=diagonal_clamp_min)
-            log_diagonal = torch.log(diagonal_elements)
+            # Construir matriz P = L * L^T
+            P = torch.bmm(L, L.transpose(1, 2))
             
-            Q = V + 0.5 * torch.sum(log_diagonal, dim=1)
+            # Calcular ventaja cuadrática
+            action_diff = action_tensor - mu
+            advantage = 0.5 * torch.sum(action_diff * torch.bmm(P, action_diff.unsqueeze(2)).squeeze(2), dim=1, keepdim=True)
+            
+            # Combinar V(s) y A(s,a) para obtener Q(s,a)
+            Q = value + advantage
+            
             return Q.item()
     
     def update(self, batch_size=32):
@@ -411,23 +420,20 @@ class ImprovedHNAF:
             next_states = torch.FloatTensor([self.normalize_state(transition[4]) for transition in batch])
             weights = torch.FloatTensor(weights)
             
-            # Calcular Q-values actuales
-            V, mu, P = self.networks[mode].get_P_matrix(states)
-            diagonal_elements = torch.diagonal(P, dim1=1, dim2=2)
-            # Usar tolerancia configurable
-            tolerances = get_config_manager().get_tolerances()
-            diagonal_clamp_min = tolerances['diagonal_clamp_min']
-            diagonal_elements = torch.clamp(diagonal_elements, min=diagonal_clamp_min)
-            log_diagonal = torch.log(diagonal_elements)
-            Q_current = V + 0.5 * torch.sum(log_diagonal, dim=1)
+            # Calcular Q-values actuales usando ARQUITECTURA DE DUELO
+            value, mu, L = self.networks[mode].forward(states)
+            P = torch.bmm(L, L.transpose(1, 2))
+            action_diff = actions - mu
+            advantage = 0.5 * torch.sum(action_diff * torch.bmm(P, action_diff.unsqueeze(2)).squeeze(2), dim=1, keepdim=True)
+            Q_current = value + advantage
             
             # Calcular Q-values objetivo
             with torch.no_grad():
-                V_next, mu_next, P_next = self.target_networks[mode].get_P_matrix(next_states, training=False)
-                diagonal_elements_next = torch.diagonal(P_next, dim1=1, dim2=2)
-                diagonal_elements_next = torch.clamp(diagonal_elements_next, min=diagonal_clamp_min)
-                log_diagonal_next = torch.log(diagonal_elements_next)
-                Q_next = V_next + 0.5 * torch.sum(log_diagonal_next, dim=1)
+                value_next, mu_next, L_next = self.target_networks[mode].forward(next_states, training=False)
+                P_next = torch.bmm(L_next, L_next.transpose(1, 2))
+                action_diff_next = actions - mu_next
+                advantage_next = 0.5 * torch.sum(action_diff_next * torch.bmm(P_next, action_diff_next.unsqueeze(2)).squeeze(2), dim=1, keepdim=True)
+                Q_next = value_next + advantage_next
                 Q_target = rewards + self.gamma * Q_next
             
             # Calcular pérdida con pesos de importancia (Huber loss)

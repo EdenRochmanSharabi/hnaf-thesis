@@ -154,6 +154,7 @@ optuna_optimization:
 advanced:
   action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
   time_parameter: 1.0
+  imagination_rollouts: 5  # Número de pasos sintéticos a generar por cada paso real
 profiles:
   beginner:
     description: Configuración básica para principiantes
