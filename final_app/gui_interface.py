@@ -22,9 +22,9 @@ except ImportError:
 import numpy as np
 
 
-from final_app.training_manager import TrainingManager
-from final_app.config_manager import get_config_manager
-from final_app.logging_manager import get_logger, log_exception, log_info, log_warning
+from training_manager import TrainingManager
+from config_manager import get_config_manager
+from logging_manager import get_logger, log_exception, log_info, log_warning
 
 class RedirectText:
     """Clase para redirigir la salida de print a un widget de texto"""
@@ -1087,8 +1087,8 @@ class HNAFGUI:
             print("Iniciando optimización automática con Gemini...")
             
             # Importar módulo de optimización
-            from final_app.auto_optimizer import AutoOptimizer
-            from final_app.training_manager import TrainingManager
+            from auto_optimizer import AutoOptimizer
+            from training_manager import TrainingManager
             
             # Crear optimizador
             self.auto_optimizer = AutoOptimizer()
@@ -1138,7 +1138,7 @@ class HNAFGUI:
     def load_best_params(self):
         """Cargar mejores parámetros encontrados por Gemini"""
         try:
-            from final_app.auto_optimizer import AutoOptimizer
+            from auto_optimizer import AutoOptimizer
             
             optimizer = AutoOptimizer()
             best_params = optimizer.get_best_params()
@@ -1234,7 +1234,7 @@ class HNAFGUI:
     def load_optuna_params(self):
         """Cargar mejores parámetros encontrados por Optuna"""
         try:
-            from final_app.optuna_optimizer import OptunaOptimizer
+            from optuna_optimizer import OptunaOptimizer
             
             optimizer = OptunaOptimizer()
             best_params = optimizer.get_best_params()
@@ -1265,7 +1265,7 @@ class HNAFGUI:
     def apply_optuna_to_config(self):
         """Aplicar mejores parámetros de Optuna al config.yaml"""
         try:
-            from final_app.optuna_optimizer import OptunaOptimizer
+            from optuna_optimizer import OptunaOptimizer
             
             # Crear instancia del optimizador
             optimizer = OptunaOptimizer()

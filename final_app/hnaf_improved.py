@@ -285,7 +285,7 @@ class ImprovedHNAF:
         ]
         
         # Función de recompensa por defecto
-        self.reward_function = lambda x, y, x0, y0: self.naf_verifier.execute_function("reward_function", x, y, x0, y0)
+        self.reward_function = lambda x, y, x0, y0, mode=None, action=None, previous_state=None: self.naf_verifier.execute_function("reward_function", x, y, x0, y0)
         
         # **NUEVO**: Tracking de selección de modos para evitar colapso
         self.mode_selection_counts = {0: 0, 1: 0}

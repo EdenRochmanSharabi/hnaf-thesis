@@ -3,21 +3,18 @@ advanced:
     convergence_threshold: 0.001
     max_iterations: 50
   matplotlib:
-    available_fallback: ⚠️  Matplotlib no disponible. Gráficos deshabilitados.
+    available_fallback: "\u26A0\uFE0F  Matplotlib no disponible. Gr\xE1ficos deshabilitados."
   normalization:
     reward_normalize: true
     state_normalize: true
   optuna:
     n_trials: 100
     timeout: 3600
-  advanced:
-    action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-    time_parameter: 1.0
-  app:
+  time_parameter: 1.0
+app:
   banner:
     char: '='
     width: 60
-  exit_code_success: 0
   title: HNAF Training and Evaluation GUI
   window:
     height: 900
@@ -45,25 +42,8 @@ defaults:
       - -1
     - - 50
       - 1
-    reward_function: "-np.tanh(np.linalg.norm([x, y]) * 0.1)"
-    reward_optimization: minimizar
-hardcode_elimination:
-  arrays:
-    buffer_initial_size: 0
-    list_initial_size: 0
-    matrix_dimensions: 2
-  evaluation:
-    grid_size_default: 50
-    precision_decimal_places: 2
-    test_states_count: 5
-  optuna:
-    default_evaluation_episodes: 500
-    min_trials_before_pruning: 10
-    pruning_patience: 5
-  training:
-    episode_print_interval: 50
-    loss_moving_average_window: 50
-    reward_debug_sample_size: 10
+  reward_function: np.linalg.norm([x, y])
+  reward_optimization: minimizar
 initialization:
   network:
     bias_constant: 0.0
@@ -78,40 +58,24 @@ initialization:
 interface:
   checkboxes:
     reward_normalize: false
-    reward_shaping: true
+    reward_shaping: false
     show_loss: true
     show_precision: true
     show_rewards: true
-    smart_reward: true
     use_custom_functions: false
     use_gemini_optimization: false
   status_messages:
     initializing: Iniciando...
     no_training: No iniciado
-    optimization_inactive: 'Optimización: Inactiva'
-    optuna_inactive: 'Optimización Optuna: Inactiva'
-logging:
-  backup_count: 5
-  console_output: true
-  enabled: true
-  exception_handling:
-    auto_recovery_attempts: 2
-    include_context: true
-    log_full_traceback: true
-  file_output: true
-  file_path: logs/hnaf_system.log
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: INFO
-  max_file_size_mb: 10
+    optimization_inactive: "Optimizaci\xF3n: Inactiva"
+    optuna_inactive: "Optimizaci\xF3n Optuna: Inactiva"
 network:
   defaults:
     action_dim: 2
-    hidden_dim: 512
+    hidden_dim: 256
     num_layers: 3
     num_modes: 2
     state_dim: 2
-    weight_initialization: xavier_uniform
-    bias_initialization: zeros
   ranges:
     action_dim:
     - 1
@@ -149,14 +113,24 @@ numerical:
 optuna_optimization:
   backup_file: /Users/edenrochman/Documents/Offline_projects/HNAF Jose/config.yaml.backup_pre_optuna
   best_score: 7.884716125656723
-
-# Configuración avanzada para optimización final
-advanced:
-  action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-  time_parameter: 1.0
+  last_update: '2025-08-03 10:29:06'
+  optimized_params:
+  - hidden_dim
+  - num_layers
+  - lr
+  - batch_size
+  - initial_epsilon
+  - final_epsilon
+  - max_steps
+  - buffer_capacity
+  - alpha
+  - beta
+  - tau
+  - gamma
+  total_trials: 0
 profiles:
   beginner:
-    description: Configuración básica para principiantes
+    description: "Configuraci\xF3n b\xE1sica para principiantes"
     network:
       hidden_dim: 32
       num_layers: 2
@@ -164,7 +138,7 @@ profiles:
       learning_rate: 0.001
       num_episodes: 500
   expert:
-    description: Configuración avanzada para experimentación
+    description: "Configuraci\xF3n avanzada para experimentaci\xF3n"
     network:
       hidden_dim: 128
       num_layers: 4
@@ -172,7 +146,7 @@ profiles:
       learning_rate: 1.0e-05
       num_episodes: 2000
   intermediate:
-    description: Configuración balanceada
+    description: "Configuraci\xF3n balanceada"
     network:
       hidden_dim: 64
       num_layers: 3
@@ -180,7 +154,7 @@ profiles:
       learning_rate: 0.0001
       num_episodes: 1000
   research:
-    description: Configuración para investigación intensiva
+    description: "Configuraci\xF3n para investigaci\xF3n intensiva"
     network:
       hidden_dim: 256
       num_layers: 5
@@ -194,87 +168,33 @@ reward_shaping:
     oscillation_penalty: 0.05
     suboptimal_penalty: 0.1
     success_bonus: 1.0
-  curriculum_learning:
-    enabled: true
-    phases:
-    - difficulty: easy
-      episodes_ratio: 0.4
-      name: basic
-      state_range: 0.05
-    - difficulty: medium
-      episodes_ratio: 0.35
-      name: intermediate
-      state_range: 0.15
-    - difficulty: hard
-      episodes_ratio: 0.25
-      name: advanced
-      state_range: 0.3
   enabled: false
   mode_aware:
     correct_mode_multiplier: 0.1
-    incorrect_mode_multiplier: 2.0
+    incorrect_mode_multiplier: 7.5
   state_initialization:
-    convergence_threshold: 0.01
-    max_range: 0.5
     min_range: -0.5
-  supervised_states:
-    additional_states:
-      mode0_variants:
-      - - 0.15
-        - 0.05
-      - - 0.2
-        - -0.1
-      - - 0.12
-        - 0.03
-      - - 0.08
-        - -0.02
-      mode1_variants:
-      - - 0.05
-        - 0.15
-      - - -0.1
-        - 0.2
-      - - 0.03
-        - 0.12
-      - - -0.02
-        - 0.08
-    fallback_multiplier: 0.1
-    mode0_state:
-    - 0.1
-    - 0.0
-    mode1_state:
-    - 0.0
-    - 0.1
+    max_range: 0.5
+    convergence_threshold: 0.01
 training:
   defaults:
-    alpha: 0.9
-    batch_size: 256
-    beta: 0.9
+    alpha: 0.5
+    batch_size: 64
+    beta: 0.3
     buffer_capacity: 20000
-    final_epsilon: 0.3
+    final_epsilon: 0.05
     gamma: 0.999
-    initial_epsilon: 0.5
-    learning_rate: 3.94e-06
+    initial_epsilon: 0.6
+    learning_rate: 0.012075241256926888
     max_steps: 200
-    num_episodes: 2000
-    supervised_episodes: 100
-    tau: 0.01
-    gradient_clip: 0.5
+    num_episodes: 1000
+    supervised_episodes: 50
+    tau: 0.005
   evaluation:
     grid_size: 50
     grid_size_display: 100
     interval: 50
     num_episodes: 10
-    test_states:
-    - - 0.1
-      - 0.1
-    - - 0.0
-      - 0.1
-    - - 0.1
-      - 0.0
-    - - 0.05
-      - 0.05
-    - - -0.05
-      - 0.08
   ranges:
     alpha:
     - 0.0

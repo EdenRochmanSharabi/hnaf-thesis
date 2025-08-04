@@ -14,12 +14,11 @@ import os
 import sys
 
 # Importar config manager para actualizar config.yaml
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from final_app.config_manager import get_config_manager
+from config_manager import get_config_manager
 
 class OptunaOptimizer:
     def __init__(self):
-        self.is_running = False
+        self.is_running = True  # Iniciar como True para que funcione continuamente
         self.current_iteration = 0
         self.best_score = float('-inf')
         self.best_params = None
@@ -31,7 +30,8 @@ class OptunaOptimizer:
         # Configuración para optimización nocturna
         self.max_iterations = None  # Sin límite de trials - solo detener manualmente
         # Cargar desde configuración en lugar de hardcodear
-        hardcode_config = self.config_manager.get_hardcode_elimination_config()
+        config_manager = get_config_manager()
+        hardcode_config = config_manager.get_hardcode_elimination_config()
         self.evaluation_episodes = hardcode_config['optuna']['default_evaluation_episodes']
         self.timeout_minutes = None  # Sin timeout - continúa hasta parar manualmente
         self.best_params_file = "best_hyperparameters_optuna.json"
@@ -155,8 +155,12 @@ class OptunaOptimizer:
         config_manager = get_config_manager()
         network_defaults = config_manager.get_network_defaults()
         training_defaults = config_manager.get_training_defaults()
+        interface_config = config_manager.get_interface_config()
         
         return {
+            "state_dim": network_defaults['state_dim'],
+            "action_dim": network_defaults['action_dim'],
+            "num_modes": network_defaults['num_modes'],
             "hidden_dim": network_defaults['hidden_dim'],
             "num_layers": network_defaults['num_layers'],
             "lr": training_defaults['learning_rate'],
@@ -166,7 +170,12 @@ class OptunaOptimizer:
             "max_steps": training_defaults['max_steps'],
             "buffer_capacity": training_defaults['buffer_capacity'],
             "alpha": training_defaults['alpha'],
-            "beta": training_defaults['beta']
+            "beta": training_defaults['beta'],
+            "tau": training_defaults['tau'],
+            "gamma": training_defaults['gamma'],
+            "num_episodes": self.evaluation_episodes,
+            "reward_normalize": interface_config['checkboxes']['reward_normalize'],
+            "reward_shaping": interface_config['checkboxes']['reward_shaping']
         }
     
     def objective(self, trial):
@@ -223,7 +232,12 @@ class OptunaOptimizer:
     def evaluate_params(self, params):
         """Evaluar parámetros usando el training manager"""
         try:
-            from .training_manager import TrainingManager
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            from training_manager import TrainingManager
+            
+            logger.info(f"🔄 Evaluando trial con parámetros: {params}")
             
             training_manager = TrainingManager()
             model, training_results = training_manager.train_hnaf(params)
@@ -246,28 +260,42 @@ class OptunaOptimizer:
                     balance_bonus = 0.2 * mode_balance
                     score += balance_bonus
                 
+                logger.info(f"✅ Trial completado - Score: {score:.4f} (precision: {final_accuracy:.2%}, recompensa: {avg_reward:.4f}, normalizada: {normalized_reward:.3f}, balance: {mode_balance:.3f})")
                 print(f"   Score Optuna: {score:.4f} (precision: {final_accuracy:.2%}, recompensa: {avg_reward:.4f}, normalizada: {normalized_reward:.3f})")
                 
                 return score
             else:
+                logger.warning("❌ Trial falló - No hay resultados de entrenamiento")
                 return float('-inf')
                 
         except Exception as e:
+            logger.error(f"❌ Error en evaluación Optuna: {e}")
             print(f"Error en evaluación Optuna: {e}")
             return float('-inf')
     
     def optimize_loop(self):
         """Bucle principal de optimización"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("🚀 Iniciando optimización automática con Optuna")
         print("Iniciando optimización automática con Optuna")
+        
         if self.timeout_minutes:
+            logger.info(f"Timeout: {self.timeout_minutes} minutos")
             print(f"Timeout: {self.timeout_minutes} minutos")
         else:
+            logger.info("⏰ Sin límite de tiempo - continúa hasta parar manualmente")
             print("⏰ Sin límite de tiempo - continúa hasta parar manualmente")
         
         if self.max_iterations:
-            print(f"Maximo iteraciones: {self.max_iterations}")
+            logger.info(f"Máximo iteraciones: {self.max_iterations}")
+            print(f"Máximo iteraciones: {self.max_iterations}")
         else:
+            logger.info("🔄 Sin límite de trials - optimización continua")
             print("🔄 Sin límite de trials - optimización continua")
+        
+        logger.info("Explorando espacio de hiperparámetros con Optuna")
         print("Explorando espacio de hiperparámetros con Optuna")
         
         try:
@@ -277,26 +305,41 @@ class OptunaOptimizer:
                 sampler=optuna.samplers.TPESampler(seed=42)
             )
             
-            # Preparar argumentos para optimize (solo agregar si no son None)
-            optimize_kwargs = {
-                'func': self.objective,
-                'callbacks': [self._optuna_callback]
-            }
+            logger.info("✅ Estudio Optuna creado exitosamente")
             
-            if self.max_iterations is not None:
-                optimize_kwargs['n_trials'] = self.max_iterations
+            # Ejecutar optimización continua
+            while self.is_running:
+                try:
+                    # Ejecutar un trial
+                    trial = self.study.ask()
+                    value = self.objective(trial)
+                    self.study.tell(trial, value)
+                    
+                    # Log del progreso
+                    logger.info(f"📊 Trial {len(self.study.trials)} completado - Score: {value:.4f}")
+                    if value > self.best_score:
+                        logger.info(f"🎉 Nuevo mejor score: {value:.4f} (anterior: {self.best_score:.4f})")
+                        self.best_score = value
+                        self.best_params = trial.params
+                        self.save_best_params()
+                    
+                except KeyboardInterrupt:
+                    logger.info("⏹️ Optimización detenida por el usuario")
+                    break
+                except Exception as e:
+                    logger.error(f"❌ Error en trial: {e}")
+                    continue
             
-            if self.timeout_minutes is not None:
-                optimize_kwargs['timeout'] = self.timeout_minutes * 60
-            
-            # Ejecutar optimización
-            self.study.optimize(**optimize_kwargs)
+            logger.info("✅ Optimización Optuna completada")
+            logger.info(f"🏆 Mejor score final: {self.best_score}")
+            logger.info(f"📈 Total trials: {len(self.study.trials)}")
             
             print("Optimización Optuna completada")
             print(f"Mejor score: {self.best_score}")
             print(f"Total iteraciones: {len(self.study.trials)}")
             
         except Exception as e:
+            logger.error(f"❌ Error en optimización Optuna: {e}")
             print(f"Error en optimización Optuna: {e}")
         finally:
             self.is_running = False
@@ -372,8 +415,8 @@ class OptunaOptimizer:
         """Obtener matrices dinámicamente - usar config por defecto o optimizar"""
         
         # Opción 1: Usar matrices del config.yaml por defecto
-        interface_config = config_manager.get_interface_config()
-        matrices_config = interface_config.get('matrices', {})
+        defaults_config = config_manager.get_defaults_config()
+        matrices_config = defaults_config.get('matrices', {})
         
         # VERIFICAR MATRICES (SIN FALLBACKS)
         if 'A1' not in matrices_config or 'A2' not in matrices_config:

@@ -10,10 +10,8 @@ advanced:
   optuna:
     n_trials: 100
     timeout: 3600
-  advanced:
-    action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-    time_parameter: 1.0
-  app:
+  time_parameter: 1.0
+app:
   banner:
     char: '='
     width: 60
@@ -45,25 +43,8 @@ defaults:
       - -1
     - - 50
       - 1
-    reward_function: "-np.tanh(np.linalg.norm([x, y]) * 0.1)"
+    reward_function: -np.linalg.norm([x, y])
     reward_optimization: minimizar
-hardcode_elimination:
-  arrays:
-    buffer_initial_size: 0
-    list_initial_size: 0
-    matrix_dimensions: 2
-  evaluation:
-    grid_size_default: 50
-    precision_decimal_places: 2
-    test_states_count: 5
-  optuna:
-    default_evaluation_episodes: 500
-    min_trials_before_pruning: 10
-    pruning_patience: 5
-  training:
-    episode_print_interval: 50
-    loss_moving_average_window: 50
-    reward_debug_sample_size: 10
 initialization:
   network:
     bias_constant: 0.0
@@ -77,8 +58,8 @@ initialization:
     torch_seed: 42
 interface:
   checkboxes:
-    reward_normalize: false
-    reward_shaping: true
+    reward_normalize: true
+    reward_shaping: false
     show_loss: true
     show_precision: true
     show_rewards: true
@@ -90,19 +71,6 @@ interface:
     no_training: No iniciado
     optimization_inactive: 'Optimización: Inactiva'
     optuna_inactive: 'Optimización Optuna: Inactiva'
-logging:
-  backup_count: 5
-  console_output: true
-  enabled: true
-  exception_handling:
-    auto_recovery_attempts: 2
-    include_context: true
-    log_full_traceback: true
-  file_output: true
-  file_path: logs/hnaf_system.log
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: INFO
-  max_file_size_mb: 10
 network:
   defaults:
     action_dim: 2
@@ -110,8 +78,6 @@ network:
     num_layers: 3
     num_modes: 2
     state_dim: 2
-    weight_initialization: xavier_uniform
-    bias_initialization: zeros
   ranges:
     action_dim:
     - 1
@@ -149,11 +115,21 @@ numerical:
 optuna_optimization:
   backup_file: /Users/edenrochman/Documents/Offline_projects/HNAF Jose/config.yaml.backup_pre_optuna
   best_score: 7.884716125656723
-
-# Configuración avanzada para optimización final
-advanced:
-  action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-  time_parameter: 1.0
+  last_update: '2025-08-03 10:29:06'
+  optimized_params:
+  - hidden_dim
+  - num_layers
+  - lr
+  - batch_size
+  - initial_epsilon
+  - final_epsilon
+  - max_steps
+  - buffer_capacity
+  - alpha
+  - beta
+  - tau
+  - gamma
+  total_trials: 0
 profiles:
   beginner:
     description: Configuración básica para principiantes
@@ -246,19 +222,18 @@ reward_shaping:
     - 0.1
 training:
   defaults:
-    alpha: 0.9
-    batch_size: 256
-    beta: 0.9
-    buffer_capacity: 20000
-    final_epsilon: 0.3
+    alpha: 0.5
+    batch_size: 64
+    beta: 0.3
+    buffer_capacity: 15000
+    final_epsilon: 0.01
     gamma: 0.999
-    initial_epsilon: 0.5
-    learning_rate: 3.94e-06
-    max_steps: 200
-    num_episodes: 2000
-    supervised_episodes: 100
-    tau: 0.01
-    gradient_clip: 0.5
+    initial_epsilon: 0.95
+    learning_rate: 5.0e-05
+    max_steps: 500
+    num_episodes: 500
+    supervised_episodes: 450.0
+    tau: 0.005
   evaluation:
     grid_size: 50
     grid_size_display: 100

@@ -272,6 +272,9 @@ class ImprovedHNAF:
         
         # Función de recompensa por defecto
         self.reward_function = lambda x, y, x0, y0: self.naf_verifier.execute_function("reward_function", x, y, x0, y0)
+        
+        # **NUEVO**: Tracking de selección de modos para evitar colapso
+        self.mode_selection_counts = {0: 0, 1: 0}
     
     def normalize_state(self, state):
         """Normalizar estado (epsilon desde configuración)"""
@@ -346,6 +349,9 @@ class ImprovedHNAF:
             mode = best_mode
             action = best_action
         
+        # **NUEVO**: Trackear selección de modos para evitar colapso
+        self.mode_selection_counts[mode] = self.mode_selection_counts.get(mode, 0) + 1
+        
         return mode, action
     
     def compute_Q_value(self, state, action, mode):
@@ -417,7 +423,12 @@ class ImprovedHNAF:
             # Backpropagation
             self.optimizers[mode].zero_grad()
             weighted_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.networks[mode].parameters(), 1.0)  # max_norm=1.0
+            
+            # **MEJORADO**: Gradient clipping configurable desde config.yaml
+            training_config = self.config_manager.get_training_defaults()
+            gradient_clip = training_config.get('gradient_clip', 0.5)
+            torch.nn.utils.clip_grad_norm_(self.networks[mode].parameters(), gradient_clip)
+            
             self.optimizers[mode].step()
             
             # Actualizar prioridades

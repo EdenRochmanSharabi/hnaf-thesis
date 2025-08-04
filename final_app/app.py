@@ -72,10 +72,29 @@ def run_optimization():
     """Ejecutar optimización con Optuna"""
     print("🔍 Iniciando optimización Optuna...")
     try:
-        config_manager = get_config_manager()
-        optimizer = OptunaOptimizer(config_manager)
-        best_params = optimizer.optimize()
-        print(f"✅ Optimización completada. Mejores parámetros encontrados.")
+        optimizer = OptunaOptimizer()
+        
+        # Configurar logging detallado
+        import logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('optuna_optimization.log'),
+                logging.StreamHandler()
+            ]
+        )
+        
+        print("🔄 Iniciando optimización continua...")
+        print("📝 Logs guardados en: optuna_optimization.log")
+        print("⏰ Para detener: Ctrl+C")
+        
+        # Ejecutar optimización en el hilo principal (no en background)
+        optimizer.optimize_loop()
+        
+        return True
+    except KeyboardInterrupt:
+        print("\n⏹️ Optimización detenida por el usuario")
         return True
     except Exception as e:
         print(f"❌ Error en optimización: {e}")

@@ -9,8 +9,8 @@ import time
 import numpy as np
 import torch
 from hnaf_improved import ImprovedHNAF
-from final_app.config_manager import get_config_manager
-from final_app.logging_manager import get_logger, log_exception, log_info, log_warning, log_error
+from config_manager import get_config_manager
+from logging_manager import get_logger, log_exception, log_info, log_warning, log_error
 
 
 
