@@ -179,9 +179,12 @@ class OptunaOptimizer:
         }
     
     def objective(self, trial):
-        """Función objetivo para Optuna"""
+        """Función objetivo para Optuna - CADA TRIAL ES INDEPENDIENTE"""
         if not self.is_running:
             raise optuna.TrialPruned()
+        
+        # 🚀 IMPORTANTE: Cada trial debe ser completamente independiente
+        # No hay fuga de estado entre trials - cada uno empieza desde cero
         
         # Definir espacio de búsqueda (solo parámetros optimizables)
         optuna_params = {
@@ -230,7 +233,7 @@ class OptunaOptimizer:
             return float('-inf')
     
     def evaluate_params(self, params):
-        """Evaluar parámetros usando el training manager"""
+        """Evaluar parámetros usando el training manager - NUEVA INSTANCIA POR TRIAL"""
         try:
             import logging
             logger = logging.getLogger(__name__)
@@ -239,6 +242,9 @@ class OptunaOptimizer:
             
             logger.info(f"🔄 Evaluando trial con parámetros: {params}")
             
+            # 🚀 SOLUCIÓN: Crear NUEVA instancia del TrainingManager para cada trial
+            # Esto evita la "fuga de estado" entre pruebas de Optuna
+            print(f"🆕 Creando NUEVA instancia para trial #{trial.number} - Sin fuga de estado")
             training_manager = TrainingManager()
             model, training_results = training_manager.train_hnaf(params)
             
