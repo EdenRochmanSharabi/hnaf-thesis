@@ -140,12 +140,18 @@ class PolicyEvaluator:
         # Simular dinámica del sistema
         # x(t+1) = A*x(t) + B*u(t)
         B = np.eye(self.state_dim)  # Matriz de control por defecto
+        # Asegurar formas correctas y evitar NaNs
+        state_np = np.asarray(state_np, dtype=float).reshape(-1)
+        control = np.asarray(control, dtype=float).reshape(-1)
         next_state_np = A @ state_np + B @ control
+        # Clipping para evitar explosiones numéricas según límites de estado
+        state_limits = self.config_manager.get_state_limits()
+        next_state_np = np.clip(next_state_np, state_limits['min'], state_limits['max'])
         
         # Calcular recompensa (función de coste cuadrática)
-        Q = np.eye(self.state_dim)  # Matriz de ponderación del estado
-        R = 0.1 * np.eye(self.action_dim)  # Matriz de ponderación del control
-        cost = next_state_np.T @ Q @ next_state_np + control.T @ R @ control
+        Q = np.eye(self.state_dim)
+        R = 0.1 * np.eye(self.action_dim)
+        cost = float(next_state_np.T @ Q @ next_state_np + control.T @ R @ control)
         reward = -cost
         
         # Verificar si el episodio termina

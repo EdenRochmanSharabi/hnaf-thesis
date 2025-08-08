@@ -25,6 +25,7 @@ from hnaf_improved import HNAFImproved
 from config_manager import get_config_manager
 from logging_manager import get_logger
 from reporting_utils import create_report, create_latex_report, calculate_stability_metrics
+from plot_utils import plot_3d_trajectories
 
 class PolicyEvaluator:
     """Evaluador de políticas HNAF para análisis de estabilidad"""
@@ -63,7 +64,10 @@ class PolicyEvaluator:
             self.model = HNAFImproved(self.config_manager.config, self.logger)
             
             # Cargar pesos del modelo
-            checkpoint = torch.load(model_path, map_location=self.device)
+            # Nota: En PyTorch 2.6+ el valor por defecto de weights_only cambió a True,
+            # lo que puede romper la carga de checkpoints con metadatos serializados.
+            # Forzamos weights_only=False de forma explícita para compatibilidad.
+            checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
             self.model.model.load_state_dict(checkpoint['model_state_dict'])
             self.model.target_model.load_state_dict(checkpoint['target_model_state_dict'])
             
@@ -83,36 +87,39 @@ class PolicyEvaluator:
         if max_steps is None:
             max_steps = self.max_steps
             
-        # Convertir estado inicial a tensor
-        if isinstance(initial_state, np.ndarray):
-            state = torch.FloatTensor(initial_state).to(self.device)
+        # Asegurar dimensión del estado y trabajar internamente con numpy
+        init = np.array(initial_state, dtype=np.float32).reshape(-1)
+        if init.shape[0] < self.state_dim:
+            init = np.pad(init, (0, self.state_dim - init.shape[0]))
         else:
-            state = torch.FloatTensor(initial_state).to(self.device)
+            init = init[: self.state_dim]
+        state_np = init
         
-        trajectory = [state.cpu().numpy()]
+        trajectory = [state_np.copy()]
         switching_signals = []
         control_inputs = []
         rewards = []
         
         for step in range(max_steps):
             # Obtener acción del modelo (sin exploración)
-            with torch.no_grad():
-                action = self.model.select_action(state)
+            mode, cont = self.model.select_action(state_np)
+            action = (mode, cont)
             
             # Simular paso del sistema
-            next_state, reward, done = self._simulate_step(state, action)
+            next_state, reward, done = self._simulate_step(torch.FloatTensor(state_np).to(self.device), action)
             
             # Guardar datos
-            trajectory.append(next_state.cpu().numpy())
-            switching_signals.append(action[0] if isinstance(action, (list, tuple)) else action)
-            control_inputs.append(action[1] if isinstance(action, (list, tuple)) else action)
+            next_np = next_state.cpu().numpy().reshape(-1)
+            trajectory.append(next_np)
+            switching_signals.append(mode)
+            control_inputs.append(cont)
             rewards.append(reward)
             
             # Actualizar estado
-            state = next_state
+            state_np = next_np
             
             # Verificar convergencia
-            if np.linalg.norm(state.cpu().numpy()) < 0.01:
+            if np.linalg.norm(state_np) < 0.01:
                 break
                 
         return trajectory, switching_signals, control_inputs, rewards
@@ -159,7 +166,13 @@ class PolicyEvaluator:
         
         # Usar estados de prueba de la configuración
         if self.test_states:
-            conditions.extend(self.test_states)
+            for s in self.test_states:
+                arr = list(s)
+                if len(arr) < self.state_dim:
+                    arr = arr + [0.0] * (self.state_dim - len(arr))
+                else:
+                    arr = arr[: self.state_dim]
+                conditions.append(arr)
         
         # Generar condiciones adicionales
         remaining = num_conditions - len(conditions)
@@ -336,6 +349,14 @@ class PolicyEvaluator:
             if phase_portrait_path:
                 plots_paths['phase_portrait'] = phase_portrait_path
         
+        # Gráfica 3D: Trayectorias (si es 3D)
+        if self.state_dim == 3:
+            try:
+                plot_3d_trajectories(all_trajectories, save_path=os.path.join(results_dir, 'trayectorias'))
+                plots_paths['trajectories_3d'] = os.path.join(results_dir, 'trayectorias')
+            except Exception:
+                pass
+
         # Gráfica 4: Análisis de recompensas
         plots_paths['reward_analysis'] = self.plot_reward_analysis(results_dir, all_rewards)
         
@@ -348,7 +369,14 @@ class PolicyEvaluator:
             'num_modes': self.num_modes,
             'config_name': 'HNAF Mejorado',
             'stability_metrics': stability_metrics,
-            'plots': plots_paths
+            'plots': plots_paths,
+            # Añadir detalles de configuración para los informes
+            'network_defaults': self.config_manager.get_network_defaults(),
+            'training_defaults': self.config_manager.get_training_defaults(),
+            'state_limits': self.config_manager.get_state_limits(),
+            'matrices': self.config_manager.get_defaults_config().get('matrices', {}),
+            'reward_shaping': self.config_manager.get_reward_shaping_config(),
+            'config': self.config_manager.config
         }
         
         # Generar informe Markdown

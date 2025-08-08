@@ -7,6 +7,7 @@ Específicamente diseñado para documentar resultados de estabilidad HNAF
 import os
 from datetime import datetime
 import numpy as np
+import json
 
 def create_report(results_dir, report_data):
     """
@@ -29,6 +30,39 @@ def create_report(results_dir, report_data):
         f.write(f"- **Pasos de Simulación por Trayectoria:** {report_data['max_steps']}\n")
         f.write(f"- **Dimensión del Estado:** {report_data.get('state_dim', 'N/A')}\n")
         f.write(f"- **Número de Modos:** {report_data.get('num_modes', 'N/A')}\n\n")
+
+        # Resumen de configuración (si está disponible)
+        net = report_data.get('network_defaults', {})
+        trn = report_data.get('training_defaults', {})
+        state_limits = report_data.get('state_limits', {})
+        reward_shaping = report_data.get('reward_shaping', {})
+        if net or trn or state_limits or reward_shaping:
+            f.write("## Configuración (Resumen)\n")
+            if net:
+                f.write("### Parámetros de Red\n")
+                for k, v in net.items():
+                    f.write(f"- {k}: {v}\n")
+            if trn:
+                f.write("\n### Parámetros de Entrenamiento\n")
+                for k, v in trn.items():
+                    f.write(f"- {k}: {v}\n")
+            if state_limits:
+                f.write("\n### Límites del Estado\n")
+                f.write(f"- min: {state_limits.get('min')}\n")
+                f.write(f"- max: {state_limits.get('max')}\n")
+            if reward_shaping:
+                f.write("\n### Reward Shaping\n")
+                for k, v in reward_shaping.items():
+                    f.write(f"- {k}: {v}\n")
+            f.write("\n")
+
+        # Matrices del sistema
+        matrices = report_data.get('matrices', {})
+        if matrices:
+            f.write("## Matrices del Sistema\n")
+            for key in sorted([k for k in matrices.keys() if str(k).startswith('A')]):
+                f.write(f"- {key}: {matrices[key]}\n")
+            f.write("\n")
 
         # Métricas de estabilidad
         if 'stability_metrics' in report_data:
@@ -76,6 +110,14 @@ def create_report(results_dir, report_data):
         f.write("- La existencia de una ley de conmutación estabilizadora confirma que el sistema es estabilizable.\n")
         f.write("- El aprendizaje por refuerzo puede descubrir políticas de control complejas de forma constructiva.\n")
         f.write("- La metodología HNAF proporciona una herramienta práctica para el análisis de sistemas híbridos.\n\n")
+        
+        # Apéndice con configuración completa
+        if 'config' in report_data:
+            f.write("--- \n\n")
+            f.write("## Apéndice: Configuración Completa (JSON)\n")
+            f.write("```json\n")
+            f.write(json.dumps(report_data['config'], indent=2, ensure_ascii=False))
+            f.write("\n```\n")
             
     print(f"✅ Informe guardado en: {report_path}")
     return report_path
@@ -93,6 +135,33 @@ def create_latex_report(results_dir, report_data):
         f.write(f"Modelo: {report_data['model_path']}\\\\")
         f.write(f"Condiciones iniciales: {len(report_data['initial_conditions'])}\\\\")
         f.write(f"Pasos de simulación: {report_data['max_steps']}\n\n")
+        
+        # Resumen de configuración (LaTeX)
+        net = report_data.get('network_defaults', {})
+        trn = report_data.get('training_defaults', {})
+        state_limits = report_data.get('state_limits', {})
+        if any([net, trn, state_limits]):
+            f.write("\\subsection{Parámetros de Red y Entrenamiento}\n")
+            f.write("\\begin{itemize}\n")
+            for k, v in net.items():
+                f.write(f"\\item {k}: {v}\n")
+            for k, v in trn.items():
+                f.write(f"\\item {k}: {v}\n")
+            if state_limits:
+                f.write(f"\\item Límites del estado: min={state_limits.get('min')}, max={state_limits.get('max')}\n")
+            f.write("\\end{itemize}\n\n")
+
+        # Matrices del sistema (LaTeX)
+        matrices = report_data.get('matrices', {})
+        if matrices:
+            f.write("\\subsection{Matrices del Sistema}\n")
+            for key in sorted([k for k in matrices.keys() if str(k).startswith('A')]):
+                mat = matrices[key]
+                try:
+                    rows = " \\ ".join([" & ".join([str(x) for x in row]) for row in mat])
+                    f.write(f"${key} = \\begin{{bmatrix}}{rows}\\end{{bmatrix}}$\\\\\n\n")
+                except Exception:
+                    f.write(f"${key} = {mat}$\\\\\n\n")
         
         f.write("\\subsection{Trayectorias de Estado}\n")
         f.write("La Figura \\ref{fig:trajectories} muestra la evolución temporal de los estados del sistema.\n\n")

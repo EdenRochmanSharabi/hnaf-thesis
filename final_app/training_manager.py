@@ -36,6 +36,14 @@ class TrainingManager:
         # AÑADIR: Logger detallado para análisis completo
         self.detailed_logger = None
 
+        # NUEVO: Configuración de logging para controlar verbosidad por paso (sin hardcode)
+        logging_config = self.config_manager.config.get('logging', {})
+        debug_config = self.config_manager.config.get('debug', {})
+        self.per_step_logging_enabled = bool(logging_config.get('per_step_logging', False))
+        self.step_log_interval = int(logging_config.get('step_log_interval', 0) or 0)
+        # Controla si se activa el DetailedLogger (graba JSON grandes)
+        self.detailed_logging_enabled = bool(debug_config.get('log_training_progress', False))
+
 
     
     def _create_gui_reward_function(self, gui_reward_expr, params):
@@ -240,8 +248,11 @@ class TrainingManager:
             tuple: (hnaf_model, training_results)
         """
         try:
-            # Inicializar logger detallado
-            self.detailed_logger = DetailedLogger()
+            # Inicializar logger detallado solo si está habilitado en config
+            if self.detailed_logging_enabled:
+                self.detailed_logger = DetailedLogger()
+            else:
+                self.detailed_logger = None
             
             self.logger.info("="*60)
             self.logger.info("INICIANDO ENTRENAMIENTO HNAF MEJORADO")
@@ -272,8 +283,10 @@ class TrainingManager:
                     return transform_func
                 
                 # Crear funciones de transformación para cada modo
-                transform_x1 = create_transform_function(custom_funcs['A1'])
-                transform_x2 = create_transform_function(custom_funcs['A2'])
+                A1 = np.array(custom_funcs['A1'])
+                A2 = np.array(custom_funcs['A2'])
+                transform_x1 = create_transform_function(A1)
+                transform_x2 = create_transform_function(A2)
                 transformation_functions = [transform_x1, transform_x2]
                 
                 # Crear función de recompensa dinámica
@@ -304,14 +317,8 @@ class TrainingManager:
                 self.hnaf_model.transformation_functions = transformation_functions
                 self.hnaf_model.reward_function = custom_reward_function
                 
-                # **NUEVO**: Actualizar matrices de transformación con todas las disponibles
-                if len(matrices) > 2:
-                    # Pasar todas las matrices al modelo
-                    matrix_list = [matrices[key] for key in sorted(matrices.keys())]
-                    self.hnaf_model.update_transformation_matrices(*matrix_list)
-                else:
-                    # Compatibilidad con código existente
-                    self.hnaf_model.update_transformation_matrices(A1, A2)
+                # Actualizar matrices de transformación (compatibilidad 2 modos)
+                self.hnaf_model.update_transformation_matrices(A1, A2)
                 
                 print(f"✅ Funciones personalizadas cargadas:")
                 print(f"   - Coordenadas iniciales: ({custom_funcs['x0']}, {custom_funcs['y0']})")
@@ -362,6 +369,25 @@ class TrainingManager:
             except Exception as e:
                 self.logger.error(f"ERROR al inicializar HNAFImproved: {e}")
                 raise
+
+            # Opcional: precargar pesos desde un checkpoint para fine-tuning
+            try:
+                preload_path = params.get('preload_model_path')
+                if preload_path:
+                    from model_saver import get_model_saver
+                    self.logger.info(f"Precargando pesos desde: {preload_path}")
+                    saver = get_model_saver()
+                    loaded_model, _ = saver.load_model(preload_path, model_instance=self.hnaf_model)
+                    if loaded_model is not None:
+                        self.hnaf_model = loaded_model
+                        # Asegurar referencia de config_manager
+                        self.hnaf_model.config_manager = self.config_manager
+                        self.logger.info("Checkpoint precargado para fine-tuning")
+                    else:
+                        self.logger.warning("No se pudo precargar el checkpoint; se continúa desde inicialización actual")
+            except Exception as e:
+                self.logger.error(f"ERROR al precargar checkpoint: {e}")
+                # Continuar sin abortar: el fine-tuning puede iniciar desde el estado actual
             
             # AÑADIR: Inicializar el proceso de ruido OU
             self.logger.info("Inicializando ruido OU...")
@@ -420,11 +446,13 @@ class TrainingManager:
             self.logger.info(f"Epsilon decay: {epsilon_decay}")
             
             for episode in range(int(params['num_episodes'])):
-                # Iniciar logging detallado del episodio
+                # Iniciar logging detallado del episodio (si está habilitado)
                 episode_type = "supervised" if episode < supervised_episodes else "normal"
-                episode_idx = self.detailed_logger.log_episode_start(
-                    episode + 1, int(params['num_episodes']), episode_type
-                )
+                episode_idx = None
+                if self.detailed_logger is not None:
+                    episode_idx = self.detailed_logger.log_episode_start(
+                        episode + 1, int(params['num_episodes']), episode_type
+                    )
                 
                 self.logger.info(f"=== EPISODIO {episode + 1}/{int(params['num_episodes'])} ===")
                 
@@ -573,7 +601,8 @@ class TrainingManager:
                 'total_episodes': int(params['num_episodes']),
                 'supervised_episodes': supervised_episodes
             }
-            self.detailed_logger.log_training_end(final_results)
+            if self.detailed_logger is not None:
+                self.detailed_logger.log_training_end(final_results)
             
             return self.hnaf_model, self.training_results
             
@@ -584,6 +613,14 @@ class TrainingManager:
                        f"   ENTRENAMIENTO FALLIDO - Revisa configuración"
             print(error_msg)
             raise RuntimeError(f"Entrenamiento falló: {e}")
+
+    def _should_log_step(self, step: int) -> bool:
+        """Determina si se deben registrar logs de paso según configuración."""
+        if not self.per_step_logging_enabled:
+            return False
+        if self.step_log_interval <= 1:
+            return True
+        return (step % self.step_log_interval) == 0
     
     def _calculate_simple_stability(self, training_data):
         """Calcular estabilidad de forma simple"""
@@ -666,7 +703,18 @@ class TrainingManager:
             
             # Usar rango de estados basado en la fase
             state_range = current_phase.get('state_range', 0.15)
-            state = np.random.uniform(-state_range, state_range, 2)
+
+            # Enfoque a la frontera: muestrear cerca de y = ±x con prob. configurable
+            frontier_prob = float(curriculum_config.get('frontier_focus_prob', 0.0))
+            frontier_bw = float(curriculum_config.get('frontier_bandwidth', 0.02))
+            if np.random.rand() < frontier_prob:
+                x = np.random.uniform(-state_range, state_range)
+                sign = 1.0 if np.random.rand() < 0.5 else -1.0
+                y = sign * x + np.random.uniform(-frontier_bw, frontier_bw)
+                y = np.clip(y, -state_range, state_range)
+                state = np.array([x, y])
+            else:
+                state = np.random.uniform(-state_range, state_range, 2)
             
             if episode_num % 50 == 0:  # Mostrar progreso de curriculum
                 print(f"   📚 Curriculum: Fase '{current_phase.get('name', 'unknown')}' (rango: ±{state_range:.2f})")
@@ -760,22 +808,35 @@ class TrainingManager:
         import numpy as np
         
         self.logger.info("=== INICIANDO EPISODIO NORMAL ===")
-        self.logger.info(f"max_steps: {max_steps}, epsilon: {epsilon}")
+        self.logger.debug(f"max_steps: {max_steps}, epsilon: {epsilon}")
         
         # Reiniciar el ruido OU al inicio de cada episodio
         if self.noise is not None:
             self.noise.reset()
-            self.logger.info("Ruido OU reiniciado")
+            self.logger.debug("Ruido OU reiniciado")
         else:
-            self.logger.info("No hay ruido OU configurado")
+            self.logger.debug("No hay ruido OU configurado")
         
-        # Estado inicial aleatorio
-        init_config = self.config_manager.get_reward_shaping_config().get('state_initialization', {})
+        # Estado inicial aleatorio (con posible enfoque a frontera)
+        reward_cfg = self.config_manager.get_reward_shaping_config()
+        init_config = reward_cfg.get('state_initialization', {})
         min_range = init_config.get('min_range', -0.5)
         max_range = init_config.get('max_range', 0.5)
-        state = np.random.uniform(min_range, max_range, 2)
+
+        # Enfoque a la frontera controlado por curriculum_learning
+        curriculum_config = reward_cfg.get('curriculum_learning', {})
+        frontier_prob = float(curriculum_config.get('frontier_focus_prob', 0.0))
+        frontier_bw = float(curriculum_config.get('frontier_bandwidth', 0.02))
+        if np.random.rand() < frontier_prob:
+            x = np.random.uniform(min_range, max_range)
+            sign = 1.0 if np.random.rand() < 0.5 else -1.0
+            y = sign * x + np.random.uniform(-frontier_bw, frontier_bw)
+            y = np.clip(y, min_range, max_range)
+            state = np.array([x, y])
+        else:
+            state = np.random.uniform(min_range, max_range, 2)
         previous_state = None
-        self.logger.info(f"Estado inicial: {state} (rango: [{min_range}, {max_range}])")
+        self.logger.debug(f"Estado inicial: {state} (rango: [{min_range}, {max_range}])")
         
         total_reward = 0
         mode_counts = {0: 0, 1: 0}
@@ -783,7 +844,7 @@ class TrainingManager:
         # Obtener matrices para la simulación del entorno
         A1 = self.hnaf_model.transformation_matrices[0]
         A2 = self.hnaf_model.transformation_matrices[1]
-        self.logger.info(f"Matrices A1: {A1}, A2: {A2}")
+        self.logger.debug(f"Matrices A1: {A1}, A2: {A2}")
         
         # --- EXPLORACIÓN INTELIGENTE CON RUIDO OU ---
         # Contar episodios para alternar modos
@@ -792,30 +853,34 @@ class TrainingManager:
         
         # Forzar exploración de modos alternados en episodios tempranos
         force_mode_exploration = epsilon > 0.3  # Solo en episodios tempranos
-        self.logger.info(f"Episode count: {self._episode_count}, Force mode exploration: {force_mode_exploration}")
+        self.logger.debug(f"Episode count: {self._episode_count}, Force mode exploration: {force_mode_exploration}")
 
         for step in range(max_steps):
-            self.logger.info(f"--- PASO {step + 1}/{max_steps} ---")
-            self.logger.info(f"Estado actual: {state}")
+            if self._should_log_step(step):
+                self.logger.debug(f"--- PASO {step + 1}/{max_steps} ---")
+                self.logger.debug(f"Estado actual: {state}")
             
             # 1. SELECCIÓN DE MODO Y ACCIÓN ÓPTIMA (sin epsilon)
             if force_mode_exploration and step % 10 == 0:  # Cada 10 pasos
                 # Alternar entre modos para forzar exploración
                 mode = step // 10 % 2  # Alternar 0, 1, 0, 1...
-                self.logger.info(f"Forzando modo alternado: {mode}")
+                if self._should_log_step(step):
+                    self.logger.debug(f"Forzando modo alternado: {mode}")
                 _, action = self.hnaf_model.select_action(state)
                 selection_reason = "forced_alternation"
             else:
                 # Selección normal SIN epsilon (la exploración viene del ruido OU)
-                self.logger.info("Selección normal de modo")
+                if self._should_log_step(step):
+                    self.logger.debug("Selección normal de modo")
                 mode, action = self.hnaf_model.select_action(state)
                 selection_reason = "normal_selection"
             
-            self.logger.info(f"Modo seleccionado: {mode}, Acción base: {action}")
+            if self._should_log_step(step):
+                self.logger.debug(f"Modo seleccionado: {mode}, Acción base: {action}")
             mode_counts[mode] += 1
             
             # Logging detallado de selección de modo
-            if episode_idx is not None and self.detailed_logger:
+            if episode_idx is not None and self.detailed_logger and self._should_log_step(step):
                 # Obtener Q-values para todos los modos (usando eval mode)
                 all_q_values = []
                 self.hnaf_model.model.eval()
@@ -838,29 +903,35 @@ class TrainingManager:
                 # La magnitud del ruido disminuye a medida que epsilon baja
                 action_with_noise = action + epsilon * noise_sample
                 action_with_noise = np.clip(action_with_noise, -1.0, 1.0)  # Asegurar que la acción es válida
-                self.logger.info(f"Ruido OU añadido: {noise_sample}, Acción final: {action_with_noise}")
+                if self._should_log_step(step):
+                    self.logger.debug(f"Ruido OU añadido: {noise_sample}, Acción final: {action_with_noise}")
             else:
                 # Fallback si no hay ruido OU configurado
                 action_with_noise = action
-                self.logger.info("Sin ruido OU, usando acción base")
+                if self._should_log_step(step):
+                    self.logger.debug("Sin ruido OU, usando acción base")
 
             # Aplicar transformación del entorno
             A = A1 if mode == 0 else A2
             next_state = (A @ state.reshape(-1, 1)).flatten()
-            self.logger.info(f"Matriz aplicada: A{mode+1}, Estado siguiente (antes de clip): {next_state}")
+            if self._should_log_step(step):
+                self.logger.debug(f"Matriz aplicada: A{mode+1}, Estado siguiente (antes de clip): {next_state}")
             
             # Limitar estados
             state_limits = self.hnaf_model.config_manager.get_state_limits()
             next_state = np.clip(next_state, state_limits['min'], state_limits['max'])
-            self.logger.info(f"Límites de estado: {state_limits}, Estado siguiente (después de clip): {next_state}")
+            if self._should_log_step(step):
+                self.logger.debug(f"Límites de estado: {state_limits}, Estado siguiente (después de clip): {next_state}")
             
             # Calcular recompensa pasando el estado anterior
-            self.logger.info("Calculando recompensa...")
+            if self._should_log_step(step):
+                self.logger.debug("Calculando recompensa...")
             try:
                 reward = self.hnaf_model.reward_function(
                     next_state[0], next_state[1], state[0], state[1], mode, action_with_noise, previous_state
                 )
-                self.logger.info(f"Recompensa calculada: {reward} (tipo: {type(reward)})")
+                if self._should_log_step(step):
+                    self.logger.debug(f"Recompensa calculada: {reward} (tipo: {type(reward)})")
                 
                 # Verificar que reward no sea None
                 if reward is None:
@@ -872,10 +943,12 @@ class TrainingManager:
                 raise
             
             # Almacenar la transición REAL
-            self.logger.info("Guardando transición en replay buffer...")
+            if self._should_log_step(step):
+                self.logger.debug("Guardando transición en replay buffer...")
             try:
                 loss = self.hnaf_model.step(state, mode, action_with_noise, reward, next_state)
-                self.logger.info(f"Loss del step: {loss} (tipo: {type(loss)})")
+                if self._should_log_step(step):
+                    self.logger.debug(f"Loss del step: {loss} (tipo: {type(loss)})")
             except Exception as e:
                 self.logger.error(f"ERROR en hnaf_model.step: {e}")
                 raise
@@ -885,7 +958,8 @@ class TrainingManager:
             imagination_rollouts = advanced_config.get('imagination_rollouts', 5)
             
             if len(self.hnaf_model.replay_buffer) >= self.hnaf_model.batch_size:
-                self.logger.info(f"Iniciando imagination rollouts ({imagination_rollouts} rollouts)")
+                if self._should_log_step(step):
+                    self.logger.debug(f"Iniciando imagination rollouts ({imagination_rollouts} rollouts)")
                 # Usar el estado actual como punto de partida para la imaginación
                 imagined_state = state.copy()
                 for rollout_idx in range(imagination_rollouts):
@@ -910,20 +984,24 @@ class TrainingManager:
                     # Actualizar el estado para el siguiente paso de imaginación
                     imagined_state = next_imagined_state
                     
-                    self.logger.info(f"Rollout {rollout_idx + 1}: modo={imagined_mode}, recompensa={imagined_reward}")
+                    if self._should_log_step(step):
+                        self.logger.debug(f"Rollout {rollout_idx + 1}: modo={imagined_mode}, recompensa={imagined_reward}")
             else:
-                self.logger.info(f"No hay suficientes muestras para imagination rollouts (buffer: {len(self.hnaf_model.replay_buffer)}/{self.hnaf_model.batch_size})")
+                if self._should_log_step(step):
+                    self.logger.debug(f"No hay suficientes muestras para imagination rollouts (buffer: {len(self.hnaf_model.replay_buffer)}/{self.hnaf_model.batch_size})")
             # --- FIN DE IMAGINATION ROLLOUTS ---
             
             # Actualizar estados
             previous_state = state.copy()
             state = next_state
             total_reward += reward
-            self.logger.info(f"Total reward acumulado: {total_reward}")
+            if self._should_log_step(step):
+                self.logger.debug(f"Total reward acumulado: {total_reward}")
             
             # Criterio de parada
             state_norm = np.linalg.norm(state)
-            self.logger.info(f"Norma del estado: {state_norm}")
+            if self._should_log_step(step):
+                self.logger.debug(f"Norma del estado: {state_norm}")
             if state_norm < 0.01:
                 self.logger.info("Sistema estable, terminando episodio")
                 break
@@ -934,7 +1012,7 @@ class TrainingManager:
         self.logger.info(f"Pasos realizados: {step + 1}")
         
         # Logging detallado del fin del episodio
-        if episode_idx is not None and self.detailed_logger:
+        if episode_idx is not None and self.detailed_logger is not None:
             # Calcular loss promedio y stability score
             avg_loss = 0.0  # Se calculará si hay losses disponibles
             stability_score = 1.0 - np.linalg.norm(state)  # Score simple basado en distancia al origen

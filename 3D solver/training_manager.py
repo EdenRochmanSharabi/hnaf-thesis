@@ -60,6 +60,7 @@ class TrainingManager:
         
         A1 = matrices['A1']
         A2 = matrices['A2']
+        A_list = [matrices[k] for k in sorted(matrices.keys())]
         
         # VERIFICAR CONFIGURACIÓN (SIN FALLBACKS)
         reward_config = self.config_manager.get_reward_shaping_config()
@@ -68,12 +69,16 @@ class TrainingManager:
         
         def gui_reward_function(x, y, x0, y0, mode=None, action=None, previous_state=None):
             try:
-                state = np.array([x, y])
+                # Construir vector de estado de dimensión completa
+                sd = int(self.hnaf_model.state_dim) if hasattr(self, 'hnaf_model') and self.hnaf_model else 2
+                state = np.zeros(sd)
+                state[0] = x
+                if sd > 1:
+                    state[1] = y
                 
                 # DETECTAR TIPO DE FUNCIÓN DE RECOMPENSA
                 if gui_reward_expr == 'mode_aware_reward':
-                    # NUEVA RECOMPENSA BASADA EN MULTIPLICADORES RELATIVOS
-                    state = np.array([x, y])
+                    # NUEVA RECOMPENSA BASADA EN MULTIPLICADORES RELATIVOS (usar estado completo)
                     
                     # Calcular qué modo sería óptimo (mínima norma resultante)
                     # **NUEVO**: Soporte dinámico para múltiples modos
@@ -91,7 +96,7 @@ class TrainingManager:
                     exploration_bonus = 0.0
                     if mode is not None:
                         # Bonus por explorar el modo menos usado
-                        mode_counts = getattr(self.hnaf_model, 'mode_selection_counts', {0: 0, 1: 0})
+                        mode_counts = getattr(self.hnaf_model, 'mode_selection_counts', {i: 0 for i in range(self.hnaf_model.num_modes)})
                         total_selections = sum(mode_counts.values()) if mode_counts else 0
                         
                         if total_selections > 0:
@@ -284,9 +289,10 @@ class TrainingManager:
                     return transform_func
                 
                 # Crear funciones de transformación para cada modo
-                transform_x1 = create_transform_function(custom_funcs['A1'])
-                transform_x2 = create_transform_function(custom_funcs['A2'])
-                transformation_functions = [transform_x1, transform_x2]
+                # Construir funciones para todas las matrices Ax presentes
+                transformation_functions = []
+                for key in sorted([k for k in custom_funcs.keys() if str(k).startswith('A')]):
+                    transformation_functions.append(create_transform_function(custom_funcs[key]))
                 
                 # Crear función de recompensa dinámica
                 def custom_reward_function(x, y, x0, y0):
@@ -317,13 +323,9 @@ class TrainingManager:
                 self.hnaf_model.reward_function = custom_reward_function
                 
                 # **NUEVO**: Actualizar matrices de transformación con todas las disponibles
-                if len(matrices) > 2:
-                    # Pasar todas las matrices al modelo
-                    matrix_list = [matrices[key] for key in sorted(matrices.keys())]
-                    self.hnaf_model.update_transformation_matrices(*matrix_list)
-                else:
-                    # Compatibilidad con código existente
-                    self.hnaf_model.update_transformation_matrices(A1, A2)
+                # Pasar todas las matrices al modelo (2 o más)
+                matrix_list = [matrices[key] for key in sorted(matrices.keys())]
+                self.hnaf_model.update_transformation_matrices(*matrix_list)
                 
                 print(f"✅ Funciones personalizadas cargadas:")
                 print(f"   - Coordenadas iniciales: ({custom_funcs['x0']}, {custom_funcs['y0']})")
@@ -398,30 +400,33 @@ class TrainingManager:
             # **NUEVO**: SIEMPRE actualizar matrices desde el GUI
             if 'gui_matrices' in params:
                 gui_matrices = params['gui_matrices']
-                A1_matrix = gui_matrices['A1']
-                A2_matrix = gui_matrices['A2']
-                
                 # DEBUG: Verificar matrices antes de actualizar
                 print(f"🔍 DEBUG - Matrices desde training_manager:")
-                print(f"   A1_matrix: {A1_matrix}")
-                print(f"   A2_matrix: {A2_matrix}")
-                print(f"   A1_matrix shape: {len(A1_matrix)}x{len(A1_matrix[0])}")
-                print(f"   A2_matrix shape: {len(A2_matrix)}x{len(A2_matrix[0])}")
-                
-                self.hnaf_model.update_transformation_matrices(A1_matrix, A2_matrix)
+                print(f"   A1_matrix: {gui_matrices['A1']}")
+                print(f"   A2_matrix: {gui_matrices['A2']}")
+                print(f"   A1_matrix shape: {len(gui_matrices['A1'])}x{len(gui_matrices['A1'][0])}")
+                print(f"   A2_matrix shape: {len(gui_matrices['A2'])}x{len(gui_matrices['A2'][0])}")
+
+                # Pasar todas las matrices disponibles (A1, A2, A3, ...)
+                matrix_list = [gui_matrices[key] for key in sorted(gui_matrices.keys()) if str(key).startswith('A')]
+                self.hnaf_model.update_transformation_matrices(*matrix_list)
             elif 'custom_functions' in params:
                 # Fallback para compatibilidad
                 custom_funcs = params['custom_functions']
                 A1_matrix = custom_funcs['A1']
                 A2_matrix = custom_funcs['A2']
-                self.hnaf_model.update_transformation_matrices(A1_matrix, A2_matrix)
+                # También incluir A3 si existe
+                matrix_list = [A1_matrix, A2_matrix]
+                if 'A3' in custom_funcs:
+                    matrix_list.append(custom_funcs['A3'])
+                self.hnaf_model.update_transformation_matrices(*matrix_list)
             
             # Métricas de entrenamiento
             episode_rewards = []
             losses = []
             eval_rewards = []
             grid_accuracies = []
-            mode_selection_counts = {0: 0, 1: 0}  # Conteo de selección de modos
+            mode_selection_counts = {i: 0 for i in range(self.hnaf_model.num_modes)}  # Conteo por modo dinámico
             
             # Configuración de evaluación (NO hardcodeada)
             eval_config = self.config_manager.get_evaluation_config()
@@ -697,7 +702,7 @@ class TrainingManager:
             max_range = init_config.get('max_range', 0.5)
             state = np.random.uniform(min_range, max_range, self.hnaf_model.state_dim)
         total_reward = 0
-        mode_counts = {0: 0, 1: 0}
+        mode_counts = {i: 0 for i in range(self.hnaf_model.num_modes)}
         
         # VERIFICAR MATRICES GUI (SIN FALLBACKS)
         gui_matrices = params.get('gui_matrices', {})
@@ -706,6 +711,8 @@ class TrainingManager:
         
         A1 = np.array(gui_matrices['A1'])
         A2 = np.array(gui_matrices['A2'])
+        # Usar todas las matrices disponibles en el modelo (A1, A2, A3, ...)
+        A_list = self.hnaf_model.transformation_matrices
         
         previous_state = None  # Para el primer paso
         for step in range(max_steps):
@@ -715,28 +722,48 @@ class TrainingManager:
             
             # Cada 8 pasos, elegir un estado específico para enseñar un modo
             if step % 8 == 0:  # Estado básico Modo 0
-                state = np.array(supervised_states.get('mode0_state', [0.1, 0.0]))
+                state = np.array(supervised_states.get('mode0_state', [0.1, 0.0, 0.0]))
+                if state.shape[0] < self.hnaf_model.state_dim:
+                    state = np.pad(state, (0, self.hnaf_model.state_dim - state.shape[0]))
+                else:
+                    state = state[: self.hnaf_model.state_dim]
             elif step % 8 == 1:  # Estado variante Modo 0
-                mode0_variants = additional_states.get('mode0_variants', [[0.15, 0.05]])
+                mode0_variants = additional_states.get('mode0_variants', [[0.15, 0.05, 0.0]])
                 if mode0_variants:
                     state = np.array(mode0_variants[np.random.randint(0, len(mode0_variants))])
                 else:
-                    state = np.array([0.15, 0.05])
+                    state = np.array([0.15, 0.05, 0.0])
+                if state.shape[0] < self.hnaf_model.state_dim:
+                    state = np.pad(state, (0, self.hnaf_model.state_dim - state.shape[0]))
+                else:
+                    state = state[: self.hnaf_model.state_dim]
             elif step % 8 == 4:  # Estado básico Modo 1
-                state = np.array(supervised_states.get('mode1_state', [0.0, 0.1]))
+                state = np.array(supervised_states.get('mode1_state', [0.0, 0.1, 0.0]))
+                if state.shape[0] < self.hnaf_model.state_dim:
+                    state = np.pad(state, (0, self.hnaf_model.state_dim - state.shape[0]))
+                else:
+                    state = state[: self.hnaf_model.state_dim]
             elif step % 8 == 5:  # Estado variante Modo 1
-                mode1_variants = additional_states.get('mode1_variants', [[0.05, 0.15]])
+                mode1_variants = additional_states.get('mode1_variants', [[0.05, 0.15, 0.0]])
                 if mode1_variants:
                     state = np.array(mode1_variants[np.random.randint(0, len(mode1_variants))])
                 else:
-                    state = np.array([0.05, 0.15])
+                    state = np.array([0.05, 0.15, 0.0])
+                if state.shape[0] < self.hnaf_model.state_dim:
+                    state = np.pad(state, (0, self.hnaf_model.state_dim - state.shape[0]))
+                else:
+                    state = state[: self.hnaf_model.state_dim]
             
-            # Calcular norma de cada modo para decidir qué enseñar
-            norm_if_mode0 = np.linalg.norm(A1 @ state)
-            norm_if_mode1 = np.linalg.norm(A2 @ state)
-            
+            # Calcular norma de cada modo para decidir qué enseñar (dinámico)
+            norms = []
+            for idx, A in enumerate(A_list):
+                try:
+                    norms.append((idx, np.linalg.norm(A @ state)))
+                except Exception:
+                    # Aceptar reshape si fuese necesario
+                    norms.append((idx, np.linalg.norm((A @ state.reshape(-1, 1)).flatten())))
             # Determinar modo óptimo matemáticamente
-            truly_optimal_mode = 0 if norm_if_mode0 < norm_if_mode1 else 1
+            truly_optimal_mode = min(norms, key=lambda x: x[1])[0]
             
             # ENSEÑANZA DIRECTA: siempre usar el modo óptimo para que aprenda la relación
             forced_mode = truly_optimal_mode
@@ -746,7 +773,7 @@ class TrainingManager:
             mode, action = self.hnaf_model.select_action(state)
             
             # Aplicar transformación según el modo forzado
-            A = A1 if forced_mode == 0 else A2
+            A = A_list[forced_mode]
             next_state = A @ state.reshape(-1, 1)
             next_state = next_state.flatten()
             
@@ -755,6 +782,7 @@ class TrainingManager:
             next_state = np.clip(next_state, state_limits['min'], state_limits['max'])
             
             # **NUEVO**: Calcular recompensa con estado anterior para bonus de estabilidad
+            # Pasar solo x,y para compatibilidad; z se ignora en recompensa actual
             reward = self.hnaf_model.reward_function(next_state[0], next_state[1], 0, 0, forced_mode, action, previous_state)
             total_reward += reward
             
@@ -798,12 +826,14 @@ class TrainingManager:
         self.logger.info(f"Estado inicial: {state} (rango: [{min_range}, {max_range}])")
         
         total_reward = 0
-        mode_counts = {0: 0, 1: 0}
+        mode_counts = {i: 0 for i in range(self.hnaf_model.num_modes)}
         
-        # Obtener matrices para la simulación del entorno
-        A1 = self.hnaf_model.transformation_matrices[0]
-        A2 = self.hnaf_model.transformation_matrices[1]
-        self.logger.info(f"Matrices A1: {A1}, A2: {A2}")
+        # Obtener matrices para la simulación del entorno (todas)
+        A_list = self.hnaf_model.transformation_matrices
+        try:
+            self.logger.info(f"Matrices formas: {[A.shape for A in A_list]}")
+        except Exception:
+            pass
         
         # --- EXPLORACIÓN INTELIGENTE CON RUIDO OU ---
         # Contar episodios para alternar modos
@@ -821,7 +851,7 @@ class TrainingManager:
             # 1. SELECCIÓN DE MODO Y ACCIÓN ÓPTIMA (sin epsilon)
             if force_mode_exploration and step % 10 == 0:  # Cada 10 pasos
                 # Alternar entre modos para forzar exploración
-                mode = step // 10 % 2  # Alternar 0, 1, 0, 1...
+                mode = step // 10 % self.hnaf_model.num_modes  # Alternar entre todos los modos
                 self.logger.info(f"Forzando modo alternado: {mode}")
                 _, action = self.hnaf_model.select_action(state)
                 selection_reason = "forced_alternation"
@@ -865,7 +895,7 @@ class TrainingManager:
                 self.logger.info("Sin ruido OU, usando acción base")
 
             # Aplicar transformación del entorno
-            A = A1 if mode == 0 else A2
+            A = A_list[mode]
             next_state = (A @ state.reshape(-1, 1)).flatten()
             self.logger.info(f"Matriz aplicada: A{mode+1}, Estado siguiente (antes de clip): {next_state}")
             
@@ -877,6 +907,7 @@ class TrainingManager:
             # Calcular recompensa pasando el estado anterior
             self.logger.info("Calculando recompensa...")
             try:
+                # Pasar solo x,y para compatibilidad; z se ignora en recompensa actual
                 reward = self.hnaf_model.reward_function(
                     next_state[0], next_state[1], state[0], state[1], mode, action_with_noise, previous_state
                 )
@@ -913,7 +944,7 @@ class TrainingManager:
                     imagined_mode, imagined_action = self.hnaf_model.select_action(imagined_state) # Explotación en la imaginación
                     
                     # Simular el siguiente estado usando el modelo del mundo (matrices A)
-                    A_imagined = A1 if imagined_mode == 0 else A2
+                    A_imagined = A_list[imagined_mode]
                     next_imagined_state = (A_imagined @ imagined_state.reshape(-1, 1)).flatten()
                     
                     # Limitar estados imaginados

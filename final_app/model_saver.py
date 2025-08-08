@@ -85,8 +85,21 @@ class ModelSaver:
             Tuple (model_instance, metadata)
         """
         try:
-            # Cargar checkpoint
-            checkpoint = torch.load(model_path, map_location='cpu')
+            # Cargar checkpoint con compatibilidad para PyTorch>=2.6
+            # 1) Intentar con weights_only=True añadiendo globals seguros si es necesario
+            checkpoint = None
+            try:
+                try:
+                    # Allowlist para numpy scalar en safe unpickler
+                    import numpy as np
+                    from torch.serialization import add_safe_globals
+                    add_safe_globals([np.core.multiarray.scalar])
+                except Exception:
+                    pass
+                checkpoint = torch.load(model_path, map_location='cpu', weights_only=True)
+            except Exception:
+                # 2) Fallback explícito a weights_only=False (requiere confianza en el archivo)
+                checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
             
             # Crear instancia del modelo si no se proporciona
             if model_instance is None:

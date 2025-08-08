@@ -1,31 +1,11 @@
 advanced:
-  gemini:
-    convergence_threshold: 0.001
-    max_iterations: 50
-  matplotlib:
-    available_fallback: ⚠️  Matplotlib no disponible. Gráficos deshabilitados.
-  normalization:
-    reward_normalize: true
-    state_normalize: true
-  optuna:
-    n_trials: 100
-    timeout: 3600
-  advanced:
-    action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-    time_parameter: 1.0
-  app:
-  banner:
-    char: '='
-    width: 60
-  exit_code_success: 0
-  title: HNAF Training and Evaluation GUI
-  window:
-    height: 900
-    width: 1400
+  action_noise_std_dev: 0.2
+  imagination_rollouts: 5
+  time_parameter: 1.0
 debug:
   log_evaluation: true
   log_level: INFO
-  log_training_progress: true
+  log_training_progress: false
   print_evaluation_grid: true
   print_function_loading: true
   print_matrices: true
@@ -55,8 +35,11 @@ defaults:
     - - 0.1
       - 0.0
       - 0.9
-    reward_function: "-np.tanh(np.linalg.norm([x, y]) * 0.1)"
+    reward_function: -np.tanh(np.linalg.norm([x, y]) * 0.1)
     reward_optimization: minimizar
+gui:
+  defaults:
+    gui_reward_function: mode_aware_reward
 hardcode_elimination:
   arrays:
     buffer_initial_size: 0
@@ -113,15 +96,17 @@ logging:
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
   level: INFO
   max_file_size_mb: 10
+  per_step_logging: false
+  step_log_interval: 100
 network:
   defaults:
-    action_dim: 2  # Cambiar a 3 para sistemas 3x3
+    action_dim: 2
+    bias_initialization: zeros
     hidden_dim: 512
     num_layers: 3
-    num_modes: 2  # Cambiar a 3 para sistemas 3x3
-    state_dim: 2  # Cambiar a 3 para sistemas 3x3
+    num_modes: 2
+    state_dim: 2
     weight_initialization: xavier_uniform
-    bias_initialization: zeros
   ranges:
     action_dim:
     - 1
@@ -159,12 +144,6 @@ numerical:
 optuna_optimization:
   backup_file: /Users/edenrochman/Documents/Offline_projects/HNAF Jose/config.yaml.backup_pre_optuna
   best_score: 7.884716125656723
-
-# Configuración avanzada para optimización final
-advanced:
-  action_noise_std_dev: 0.2  # Desviación estándar del ruido añadido a la acción
-  time_parameter: 1.0
-  imagination_rollouts: 5  # Número de pasos sintéticos a generar por cada paso real
 profiles:
   beginner:
     description: Configuración básica para principiantes
@@ -207,6 +186,8 @@ reward_shaping:
     success_bonus: 1.0
   curriculum_learning:
     enabled: true
+    frontier_bandwidth: 0.02
+    frontier_focus_prob: 0.6
     phases:
     - difficulty: easy
       episodes_ratio: 0.4
@@ -222,8 +203,8 @@ reward_shaping:
       state_range: 0.3
   enabled: false
   mode_aware:
-    correct_mode_multiplier: 0.05  # Más fuerte para modo correcto
-    incorrect_mode_multiplier: 3.0  # Más fuerte para modo incorrecto
+    correct_mode_multiplier: 2.0
+    incorrect_mode_multiplier: 4.0
   state_initialization:
     convergence_threshold: 0.01
     max_range: 0.5
@@ -261,17 +242,17 @@ training:
     batch_size: 256
     beta: 0.9
     buffer_capacity: 20000
-    final_epsilon: 0.4  # Aumentado para más exploración
-    gamma: 0.995  # Aumentar visión a largo plazo
-    initial_epsilon: 0.8  # Aumentado para más exploración inicial
-    learning_rate: 5.0e-05  # Refinamiento final para ajuste más fino
-    max_steps: 200
-    num_episodes: 2500  # Extender entrenamiento para perfeccionamiento
-    supervised_episodes: 500  # Más episodios supervisados para base sólida
-    tau: 0.01  # Acelerar incorporación de conocimiento
+    final_epsilon: 0.4
+    gamma: 0.995
     gradient_clip: 0.5
+    initial_epsilon: 0.8
+    learning_rate: 2.5e-05
+    max_steps: 200
+    num_episodes: 2500
+    supervised_episodes: 500
+    tau: 0.01
   evaluation:
-    grid_size: 50
+    grid_size: 150
     grid_size_display: 100
     interval: 50
     num_episodes: 10
@@ -333,8 +314,3 @@ training:
     - 0.0001
     - 0.01
     tau_increment: 0.0001
-
-# Configuración de la interfaz gráfica
-gui:
-  defaults:
-    gui_reward_function: mode_aware_reward  # Función de recompensa original centrada en estabilización

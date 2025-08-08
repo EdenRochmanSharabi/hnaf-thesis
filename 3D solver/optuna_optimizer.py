@@ -447,6 +447,7 @@ class OptunaOptimizer:
             b21 = trial.suggest_float("A2_21", 1.0, 100.0)
             b22 = trial.suggest_float("A2_22", 0.1, 2.0)
             
+            # Mantener compatibilidad: estas variables ya no se usan directamente en 3D
             optimized_A1 = [[a11, a12], [a21, a22]]
             optimized_A2 = [[b11, b12], [b21, b22]]
             

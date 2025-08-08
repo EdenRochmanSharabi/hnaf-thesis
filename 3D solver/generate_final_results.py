@@ -43,8 +43,11 @@ def generate_final_results():
     convergence_times = []
     final_distances = []
     
+    # Respetar dimensión del estado desde config
+    state_dim = config_manager.get('network.defaults.state_dim')
+
     for traj_idx in range(num_trajectories):
-        state = np.random.uniform(-5, 5, 2)
+        state = np.random.uniform(-5, 5, state_dim)
         convergence_step = None
         
         for step in range(max_steps):
@@ -202,7 +205,7 @@ def generate_final_results():
         f.write("\\section{Resultados de Análisis de Estabilidad HNAF}\n\n")
         f.write(f"\\subsection{{Resumen Ejecutivo}}\n")
         f.write(f"El análisis de estabilidad del sistema HNAF se realizó sobre {num_trajectories} trayectorias ")
-        f.write(f"con condiciones iniciales aleatorias en la región $[-5, 5]^2$.\n\n")
+        f.write(f"con condiciones iniciales aleatorias en la región $[-5, 5]^{state_dim}$.\n\n")
         
         f.write(f"\\subsection{{Métricas Principales}}\n")
         f.write(f"\\begin{{itemize}}\n")

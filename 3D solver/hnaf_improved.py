@@ -108,18 +108,15 @@ class HNAFImproved:
         
         self.logger.info("Constructor de HNAFImproved completado exitosamente")
         
-        # Inicializar matrices de transformación por defecto (3D)
-        self.transformation_matrices = [
-            np.array([[1.0, 0.0, 0.0], [0.0, 2.0, -1.0], [0.0, 1.0, 2.0]]),  # A1 por defecto 3D
-            np.array([[1.0, 0.0, 0.0], [0.0, 2.0, -1.0], [0.0, 1.0, 2.0]])   # A2 por defecto 3D
-        ]
+        # Inicializar matrices de transformación por defecto (3D, tantas como num_modes)
+        default_A = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, -1.0], [0.0, 1.0, 2.0]])
+        self.transformation_matrices = [default_A.copy() for _ in range(int(self.num_modes))]
         
         # DEBUG: Verificar matrices por defecto
         print(f"🔍 DEBUG - Constructor HNAFImproved:")
-        print(f"   transformation_matrices[0] forma: {self.transformation_matrices[0].shape}")
-        print(f"   transformation_matrices[0] valor: {self.transformation_matrices[0]}")
-        print(f"   transformation_matrices[1] forma: {self.transformation_matrices[1].shape}")
-        print(f"   transformation_matrices[1] valor: {self.transformation_matrices[1]}")
+        for idx, mat in enumerate(self.transformation_matrices):
+            print(f"   transformation_matrices[{idx}] forma: {mat.shape}")
+            print(f"   transformation_matrices[{idx}] valor: {mat}")
         
         # Inicializar función de recompensa por defecto
         self.reward_function = self._default_reward_function
@@ -131,18 +128,31 @@ class HNAFImproved:
         """Función de recompensa por defecto"""
         return -np.tanh(np.linalg.norm([x, y]) * 0.1)
     
-    def update_transformation_matrices(self, A1_matrix, A2_matrix):
-        """Actualizar matrices de transformación"""
-        # DEBUG: Imprimir información detallada de las matrices
-        print(f"🔍 DEBUG - Matrices recibidas en update_transformation_matrices:")
-        print(f"   A1_matrix tipo: {type(A1_matrix)}, forma: {np.array(A1_matrix).shape}")
-        print(f"   A1_matrix valor: {A1_matrix}")
-        print(f"   A2_matrix tipo: {type(A2_matrix)}, forma: {np.array(A2_matrix).shape}")
-        print(f"   A2_matrix valor: {A2_matrix}")
-        
-        self.transformation_matrices[0] = np.array(A1_matrix)
-        self.transformation_matrices[1] = np.array(A2_matrix)
-        self.logger.info(f"Matrices actualizadas: A1={A1_matrix}, A2={A2_matrix}")
+    def update_transformation_matrices(self, *matrices):
+        """Actualizar matrices de transformación (soporta 2 o más matrices)."""
+        print(f"🔍 DEBUG - Matrices recibidas en update_transformation_matrices (n={len(matrices)}):")
+        normalized = []
+        for i, m in enumerate(matrices):
+            arr = np.array(m)
+            print(f"   A{i+1} tipo: {type(m)}, forma: {arr.shape}")
+            print(f"   A{i+1} valor: {arr}")
+            normalized.append(arr)
+
+        if not normalized:
+            raise ValueError("No se recibieron matrices para actualizar")
+
+        # Ajustar al número de modos del modelo
+        if len(normalized) < int(self.num_modes):
+            last = normalized[-1]
+            normalized.extend([last.copy() for _ in range(int(self.num_modes) - len(normalized))])
+
+        self.transformation_matrices = normalized[: int(self.num_modes)]
+
+        try:
+            shapes = [mat.shape for mat in self.transformation_matrices]
+            self.logger.info(f"Matrices actualizadas (formas): {shapes}")
+        except Exception:
+            pass
 
     def select_action(self, state):
         # Usar eval mode para evitar problemas con BatchNorm
@@ -251,7 +261,7 @@ class HNAFImproved:
     def evaluate_policy(self, num_episodes=10):
         """Evaluar la política actual"""
         total_rewards = []
-        mode_counts = {0: 0, 1: 0}
+        mode_counts = {i: 0 for i in range(self.num_modes)}
         
         for _ in range(num_episodes):
             # Simular un episodio simple
@@ -291,7 +301,11 @@ class HNAFImproved:
         
         for i in range(grid_size):
             for j in range(grid_size):
-                state = np.array([X[i, j], Y[i, j]])
+                # Para visualización, evaluamos sobre plano XY; z=0 si aplica
+                if self.state_dim >= 3:
+                    state = np.array([X[i, j], Y[i, j], 0.0])
+                else:
+                    state = np.array([X[i, j], Y[i, j]])
                 mode, _ = self.select_action(state)
                 mode_selections[i, j] = mode
                 
@@ -319,20 +333,28 @@ class HNAFImproved:
         print("VERIFICACIÓN HNAF MEJORADO")
         print("="*60)
         
-        test_states = [
-            np.array([0.1, 0.1]),
-            np.array([0, 0.1]),
-            np.array([0.1, 0]),
-            np.array([0.05, 0.05]),
-            np.array([-0.05, 0.08])
+        # Construir estados de prueba respetando la dimensión del estado
+        base_states_2d = [
+            [0.1, 0.1],
+            [0.0, 0.1],
+            [0.1, 0.0],
+            [0.05, 0.05],
+            [-0.05, 0.08]
         ]
+        test_states = []
+        for xs, ys in base_states_2d:
+            if self.state_dim >= 3:
+                test_states.append(np.array([xs, ys, 0.0]))
+            else:
+                test_states.append(np.array([xs, ys]))
         
         for i, state in enumerate(test_states):
             print(f"\nEstado {i+1}: {state}")
             mode, action = self.select_action(state)
             print(f"  HNAF: Modo {mode}, Q={-np.linalg.norm(state):.4f}")
-            print(f"  Óptimo: Modo {0 if state[0] > 0 else 1}")
-            print(f"  Correcto: {'✅' if mode == (0 if state[0] > 0 else 1) else '❌'}")
+            if self.num_modes >= 2:
+                print(f"  Óptimo (heurística simple): Modo {0 if state[0] > 0 else 1}")
+                print(f"  Correcto: {'✅' if mode == (0 if state[0] > 0 else 1) else '❌'}")
         
         # Evaluación en grid
         grid_results = self.evaluate_policy_grid(grid_size=50)

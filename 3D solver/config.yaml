@@ -23,49 +23,49 @@ advanced:
     height: 900
     width: 1400
 debug:
-  log_evaluation: true
-  log_level: INFO
-  log_training_progress: true
-  print_evaluation_grid: true
-  print_function_loading: true
-  print_matrices: true
-  verbose: true
+  log_evaluation: false
+  log_level: WARNING
+  log_training_progress: false
+  print_evaluation_grid: false
+  print_function_loading: false
+  print_matrices: false
+  verbose: false
 defaults:
   coordinates:
     x0: 1
     y0: 1
   matrices:
-    # Matrices 3D (Forma de Jordan)
+    # Matrices 3D (Construidas como P d P^{-1})
     A1:
     - - 1.0
-      - 0.0
-      - 0.0
-    - - 0.0
-      - 2.0
+      - 0.3333333333333333
       - -1.0
     - - 0.0
-      - 1.0
-      - 2.0
+      - 0.0
+      - 15.0
+    - - 0.0
+      - -0.3333333333333333
+      - 4.0
     A2:
-    - - 1.0
-      - 0.0
-      - 0.0
     - - 0.0
-      - 2.0
-      - -1.0
-    - - 0.0
+      - 0.0
+      - -15.0
+    - - -0.3333333333333333
       - 1.0
-      - 2.0
+      - -1.0
+    - - 0.3333333333333333
+      - 0.0
+      - 4.0
     A3:
     - - 1.0
-      - 0.0
-      - 0.0
-    - - 0.0
-      - 2.0
       - -1.0
+      - -0.3333333333333333
     - - 0.0
-      - 1.0
-      - 2.0
+      - 4.0
+      - 0.3333333333333333
+    - - 0.0
+      - -15.0
+      - 0.0
     reward_function: "-np.tanh(np.linalg.norm([x, y, z]) * 0.1)"
     reward_optimization: minimizar
 hardcode_elimination:
@@ -113,16 +113,16 @@ interface:
     optuna_inactive: 'Optimización Optuna: Inactiva'
 logging:
   backup_count: 5
-  console_output: true
+  console_output: false
   enabled: true
   exception_handling:
     auto_recovery_attempts: 2
     include_context: true
-    log_full_traceback: true
+    log_full_traceback: false
   file_output: true
   file_path: logs/hnaf_system.log
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: INFO
+  level: WARNING
   max_file_size_mb: 10
 network:
   defaults:

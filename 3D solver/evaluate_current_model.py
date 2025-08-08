@@ -40,13 +40,17 @@ def evaluate_current_model():
     
     for traj_idx in range(num_trajectories):
         # Estado inicial aleatorio
-        state = np.random.uniform(-5, 5, 2)
+        # Respetar dimensión del estado desde config
+        from config_manager import get_config_manager
+        cm = get_config_manager()
+        state_dim = cm.get('network.defaults.state_dim')
+        state = np.random.uniform(-5, 5, state_dim)
         trajectory = [state.copy()]
         total_reward = 0
         
         for step in range(max_steps):
             # Acción aleatoria (simulación básica)
-            action = np.random.uniform(-1, 1, 2)
+            action = np.random.uniform(-1, 1, state_dim)
             
             # Simular paso del entorno
             next_state = state + 0.1 * action
